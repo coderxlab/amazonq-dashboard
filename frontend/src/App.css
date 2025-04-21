@@ -1,0 +1,21 @@
+/* Custom styles for Amazon Q colors */
+.bg-amazon-teal {
+  background-color: #00A1C9;
+}
+
+.bg-amazon-teal-dark {
+  background-color: #0088A9;
+}
+
+.bg-amazon-orange {
+  background-color: #FF9900;
+}
+
+.ring-amazon-teal {
+  --tw-ring-color: #00A1C9;
+}
+
+/* Additional custom styles */
+.max-h-80vh {
+  max-height: 80vh;
+}

@@ -1,0 +1,21 @@
+# Common files/directories to ignore:
+.env           # Environment variables file
+*/.env
+**/.env
+node_modules
+node_modules/   # Node.js dependencies at root level
+*/node_modules/ # Node.js dependencies in subdirectories
+**/node_modules/ # Node.js dependencies anywhere in the project
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Editor directories and files
+.idea/
+.vscode/
+*.swp
+*.swo
