@@ -90,13 +90,13 @@ Edit the `.env` files with your AWS credentials and other configuration.
 1. Start the backend server
 ```
 cd backend
-npm run dev
+pnpm run dev
 ```
 
 2. Start the frontend development server
 ```
 cd frontend
-npm start
+pnpm start
 ```
 
 3. Open your browser and navigate to `http://localhost:3000`
