@@ -59,24 +59,6 @@ For each step:
 
 ---
 
-### 5. 📘 Create a Memory File
-
-After completing the feature:
-
-- Create a memory file in `assistant_memory/`
-- Use the format: `feat-[slugified-title]-[yyyy-mm-dd].md`
-- Include:
-  - Task description & clarifications
-  - Implementation plan
-  - Code decisions
-  - Gotchas or custom logic
-  - Testing notes
-  - Follow-ups
-
-> 📁 Refer to `CREATE_MEMORY_FILE.md` for formatting details.
-
----
-
 ## ✅ Final Checklist
 
 Before marking the feature complete:
@@ -85,7 +67,6 @@ Before marking the feature complete:
 - [ ] Implementation plan followed
 - [ ] Feature tested thoroughly
 - [ ] Code reviewed and documented
-- [ ] Memory file created in `assistant_memory/`
 
 ---
 
