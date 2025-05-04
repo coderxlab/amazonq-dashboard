@@ -32,8 +32,8 @@ This application provides insights into how developers interact with Amazon Q De
 
 ## Tech Stack
 
-- **Frontend**: React, Chart.js, TailwindCSS
-- **Backend**: Express.js
+- **Frontend**: React, Chart.js, TailwindCSS (running on port 3000)
+- **Backend**: Express.js (running on port 3001)
 - **Data**: DynamoDB tables (AmazonQDevLogging and AmazonQDevPromptLog)
 
 ## Project Structure
@@ -92,12 +92,14 @@ Edit the `.env` files with your AWS credentials and other configuration.
 cd backend
 pnpm run dev
 ```
+The backend server will run on port 3001.
 
 2. Start the frontend development server
 ```
 cd frontend
 pnpm start
 ```
+The frontend server will run on port 3000.
 
 3. Open your browser and navigate to `http://localhost:3000`
 
