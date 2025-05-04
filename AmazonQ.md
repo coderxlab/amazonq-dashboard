@@ -36,10 +36,11 @@ This document provides instructions for setting up the AWS integration for the A
    npm install
    npm run dev
    ```
+   The backend server will run on port 3001.
 
 2. Test the API endpoint:
    ```
-   curl http://localhost:5000/api/data/available-logs
+   curl http://localhost:3001/api/data/available-logs
    ```
 
    This should return a list of available log files in the S3 bucket.
