@@ -1,4 +1,4 @@
-# Amazon Q Developer Productivity Dashboard
+# Amazon Q Dashboard
 
 A dashboard for tracking and visualizing developer productivity metrics when using Amazon Q Developer.
 
@@ -39,7 +39,7 @@ This application provides insights into how developers interact with Amazon Q De
 ## Project Structure
 
 ```
-amazon-q-productivity/
+amazonq-dashboard/
 ├── backend/             # Express.js API
 ├── frontend/            # React application
 └── .amazonq/            # Project documentation and guides
@@ -50,27 +50,27 @@ amazon-q-productivity/
 ### Prerequisites
 
 - Node.js (v14+)
-- npm or yarn
+- pnpm
 - AWS account with access to the DynamoDB tables containing Amazon Q Developer usage logs
 
 ### Installation
 
 1. Clone the repository
 ```
-git clone https://github.com/yourusername/amazon-q-productivity.git
-cd amazon-q-productivity
+git clone https://github.com/yourusername/amazonq-dashboard.git
+cd amazonq-dashboard
 ```
 
 2. Install backend dependencies
 ```
 cd backend
-npm install
+pnpm install
 ```
 
 3. Install frontend dependencies
 ```
 cd frontend
-npm install
+pnpm install
 ```
 
 4. Configure environment variables
@@ -90,13 +90,13 @@ Edit the `.env` files with your AWS credentials and other configuration.
 1. Start the backend server
 ```
 cd backend
-npm run dev
+pnpm run dev
 ```
 
 2. Start the frontend development server
 ```
 cd frontend
-npm start
+pnpm start
 ```
 
 3. Open your browser and navigate to `http://localhost:3000`

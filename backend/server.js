@@ -317,6 +317,13 @@ app.get('/api/prompts', async (req, res) => {
       
       console.log(`Filtered to ${results.length} items`);
     }
+
+    // Sort results by timestamp (newest first)
+    results.sort((a, b) => {
+      const timestampA = moment(a.TimeStamp?.S || a.TimeStamp || a.timeStamp);
+      const timestampB = moment(b.TimeStamp?.S || b.TimeStamp || b.timeStamp);
+      return timestampB - timestampA; // Descending order
+    });
     
     // Implement pagination
     const startIndex = (page - 1) * limit;
