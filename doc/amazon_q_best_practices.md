@@ -1,4 +1,4 @@
-# Amazon Q Developer Guide
+# Amazon Q Developer Guides for Best Practices
 
 ## 1. Code Comprehension and Summarization
 
@@ -83,23 +83,9 @@ Source: [Mastering Amazon Q Developer: Part 1 - Crafting Prompts](https://commun
 2. "Summarize the key functionality in the `src/controllers` directory"
 3. "What are the main data models used in this application?"
 
-## 2. Documentation Generation
 
-### Documentation Types
-- **Application Structure**: Overall architecture and component relationships
-- **Framework Details**: Specific frameworks and their implementation
-- **Key Features Overview**: Core functionality and capabilities
-- **Getting Started Guide**: Setup and initial usage instructions
+## 2. Building and Running Applications
 
-### Sample Documentation Prompts
-1. "Create a comprehensive README.md for this project"
-2. "Generate API documentation for the endpoints in `routes/api.js`"
-3. "Document the database schema and relationships"
-4. "Create a developer onboarding guide for new team members"
-
-## 3. Code Debugging, Testing, and Optimization
-
-### Building and Running Applications
 Create scripts to streamline development workflows:
 ```
 @workspace Create a run-project script file that starts both the frontend and backend servers
@@ -110,7 +96,7 @@ If you're unsure about running a project:
 How do I build and run a [your language] application based on the project structure?
 ```
 
-### Debugging Assistance
+## 3. Debugging 
 Identify and fix issues with targeted prompts:
 
 **Finding the cause**:
@@ -123,7 +109,7 @@ Identify and fix issues with targeted prompts:
 This function is producing the following error: [Error message]. How can I fix it?
 ```
 
-### Test Creation
+## 4. Test Creation
 Generate comprehensive tests for your codebase:
 ```
 Create a unit test that tests get_random_word in the WordList class in the WordList.py file. The test should verify the word length is 6 characters.
@@ -131,7 +117,7 @@ Create a unit test that tests get_random_word in the WordList class in the WordL
 
 Use the `/test` command for more advanced testing scenarios.
 
-## 4. Refactoring and Feature Implementation
+## 5. Refactoring and Feature Implementation
 
 ### Refactoring Existing Code
 Use the `/dev` command to leverage Amazon Q's agentic capabilities for refactoring:
@@ -151,7 +137,7 @@ Create containerized environments for consistent development:
 Create a devfile.yaml to set up a containerized environment for running and testing this application
 ```
 
-## 5. Documentation Best Practices
+## 6. Documentation Best Practices
 
 For optimal documentation generation with Amazon Q:
 
@@ -161,7 +147,7 @@ For optimal documentation generation with Amazon Q:
 - **Specific updates**: When requesting changes to existing documentation, clearly specify sections to modify and desired changes
 - **Content limitations**: Amazon Q can't document private platforms, specialized tooling, or third-party systems it doesn't have knowledge of
 
-## 6. Git Integration
+## 7. Git Integration
 
 Use the `@git` directive to provide repository context:
 ```
@@ -174,14 +160,14 @@ Additional git-related prompts:
 @git Help me resolve this merge conflict
 ```
 
-## 7. Custom Prompts
+## 8. Custom Prompts
 
 Create reusable prompt templates with the `@prompt` directive:
 ```
 @prompt Create a template for generating API endpoint documentation
 ```
 
-## 8. Amazon Q CLI
+## 9. Amazon Q CLI
 
 ### Security Best Practices
 
@@ -226,20 +212,20 @@ Reset to default permissions:
 /tools reset
 ```
 
-### MCP (Model Context Protocol)
+## 10. MCP (Model Context Protocol)
 
-Configuration locations:
+#### Configuration locations:
 - Global: `~/.aws/amazonq/mcp.json` (applies to all workspaces)
 - Workspace: `.amazonq/mcp.json` (specific to current workspace)
 
-Best practices:
+#### Best practices:
 - Only install servers from trusted sources
 - Review tool descriptions before approving
 - Use environment variables for sensitive configuration
 - Keep MCP servers and Q CLI updated
 - Monitor logs for unexpected activity
 
-### Context Hooks
+## 11. Context Hooks
 
 Set up automated actions to run when either conversation start or prompt start
 
