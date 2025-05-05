@@ -1,14 +1,12 @@
 # Amazon Q Developer Guides for Best Practices
 
 ## 1. Code Comprehension and Summarization
-
 ### Context Awareness in Amazon Q
 Amazon Q leverages multiple context sources to provide accurate responses:
 - Current chat history and conversation flow
 - Open file content (subject to size limitations)
 - Workspace files when using the `@workspace` directive
 - Specific files and folders selected by user using `@folder` or `@file` directives (size limitations apply)
-
 ### Crafting Effective Prompts
 For optimal results with Amazon Q Developer, include these key elements:
 
