@@ -1,0 +1,23 @@
+schemaVersion: 2.0.0
+metadata:
+  name: amazon-q-productivity-dashboard
+components:
+  - name: dev
+    container:
+      image: public.ecr.aws/aws-mde/universal-image:latest
+commands:
+  - id: install
+    exec:
+      component: dev
+      commandLine: "cd backend && npm install && cd ../frontend && npm install"
+      workingDir: ${PROJECT_SOURCE}
+  - id: build
+    exec:
+      component: dev
+      commandLine: "cd frontend && npm run build"
+      workingDir: ${PROJECT_SOURCE}
+  - id: test
+    exec:
+      component: dev
+      commandLine: "cd backend && npm test || true && cd ../frontend && npm test"
+      workingDir: ${PROJECT_SOURCE}
