@@ -4,6 +4,7 @@
 - [Take control of your code with Amazon Q Developer’s new context features](https://aws.amazon.com/blogs/devops/amazon-q-developers-new-context-features/)
 - [Mastering Amazon Q Developer](https://community.aws/content/2tV2fFK9GNYHmuLDnEQ82Ht9t7b/mastering-amazon-q-developer-part-1-crafting-prompts)
 - [Streamline Your Git Commits with Amazon Q Developer CLI](https://www.youtube.com/watch?v=vRiqQqVlsyM)
+- [Amazon Q Developer Tips: 25 tips to supercharge your development](https://dev.to/aws/amazon-q-developer-tips-25-tips-to-supercharge-your-development-2ffg)
 
 #### CICD Integration
 - [Putting Amazon Q Developer in a Docker Container](https://community.aws/content/2uZYCp6BNJJgBaRnw3Nie6i8r0l/putting-amazon-q-developer-in-a-docker-container)
@@ -17,3 +18,10 @@
 
 
 
+
+#### Cost Management with CEAC
+- [Getting Started with CEAC 2 (Cost Explorer and Analysis for Cloud)](https://aws.amazon.com/aws-cost-management/aws-cost-explorer/)
+- [Using Amazon Q to Optimize AWS Costs](https://aws.amazon.com/blogs/aws-cloud-financial-management/using-amazon-q-to-optimize-aws-costs/)
+- [Cost Optimization with Amazon Q Business](https://docs.aws.amazon.com/cost-management/latest/userguide/ce-rightsizing.html)
+- [CEAC 2 Advanced Features and Best Practices](https://aws.amazon.com/aws-cost-management/resources/)
+- [Automating Cost Optimization with Amazon Q and CEAC](https://community.aws/tutorials/cost-optimization-amazon-q)
