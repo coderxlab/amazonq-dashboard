@@ -1,0 +1,6 @@
+username,givenName,familyName,email,displayName,groupName
+john.doe,John,Doe,john.doe@example.com,John Doe,test
+jane.smith,Jane,Smith,jane.smith@example.com,Jane Smith,dev
+robert.johnson,Robert,Johnson,robert.johnson@example.com,Robert Johnson,test
+susan.williams,Susan,Williams,susan.williams@example.com,Susan Williams,dev
+michael.brown,Michael,Brown,michael.brown@example.com,Michael Brown,test
