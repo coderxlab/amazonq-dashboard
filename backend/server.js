@@ -251,7 +251,7 @@ app.get('/api/activity/summary', async (req, res) => {
 // Get prompt logs with optional filtering
 app.get('/api/prompts', async (req, res) => {
   try {
-    const { userId, startDate, endDate, searchTerm, limit = 50, page = 1 } = req.query;
+    const { userId, startDate, endDate, searchTerm, limit = 50, page = 1, includeEmpty = 'false' } = req.query;
     
     let params = {
       TableName: process.env.DYNAMODB_PROMPT_LOG_TABLE
@@ -267,13 +267,25 @@ app.get('/api/prompts', async (req, res) => {
     }
     
     if (searchTerm) {
-      filterExpressions.push('contains(Prompt, :searchTerm)');
+      // Search in both prompt and response using expression attribute names for reserved keywords
+      filterExpressions.push('(contains(Prompt, :searchTerm) OR contains(#response, :searchTerm))');
       expressionAttributeValues[':searchTerm'] = searchTerm;
+      
+      // Add expression attribute names for reserved keywords
+      if (!params.ExpressionAttributeNames) {
+        params.ExpressionAttributeNames = {};
+      }
+      params.ExpressionAttributeNames['#response'] = 'Response';
     }
     
     if (filterExpressions.length > 0) {
       params.FilterExpression = filterExpressions.join(' AND ');
       params.ExpressionAttributeValues = expressionAttributeValues;
+      
+      // Make sure ExpressionAttributeNames is included in params if it was set
+      if (params.ExpressionAttributeNames && Object.keys(params.ExpressionAttributeNames).length === 0) {
+        delete params.ExpressionAttributeNames;
+      }
     }
     
     const scanResults = await docClient.scan(params).promise();
@@ -316,6 +328,16 @@ app.get('/api/prompts', async (req, res) => {
       });
       
       console.log(`Filtered to ${results.length} items`);
+    }
+    
+    // Filter out empty records if includeEmpty is false
+    // This is done after fetching results since we need to use trim() which isn't available in DynamoDB expressions
+    if (includeEmpty !== 'true') {
+      results = results.filter(item => {
+        return item.Prompt && item.Response && 
+               item.Prompt.trim() !== '' && 
+               item.Response.trim() !== '';
+      });
     }
 
     // Sort results by timestamp (newest first)
