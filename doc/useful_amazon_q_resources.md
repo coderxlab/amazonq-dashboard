@@ -4,6 +4,7 @@
 - [Take control of your code with Amazon Q Developer’s new context features](https://aws.amazon.com/blogs/devops/amazon-q-developers-new-context-features/)
 - [Mastering Amazon Q Developer](https://community.aws/content/2tV2fFK9GNYHmuLDnEQ82Ht9t7b/mastering-amazon-q-developer-part-1-crafting-prompts)
 - [Streamline Your Git Commits with Amazon Q Developer CLI](https://www.youtube.com/watch?v=vRiqQqVlsyM)
+- [Amazon Q Developer Tips: 25 tips to supercharge your development](https://dev.to/aws/amazon-q-developer-tips-25-tips-to-supercharge-your-development-2ffg)
 
 #### CICD Integration
 - [Putting Amazon Q Developer in a Docker Container](https://community.aws/content/2uZYCp6BNJJgBaRnw3Nie6i8r0l/putting-amazon-q-developer-in-a-docker-container)
