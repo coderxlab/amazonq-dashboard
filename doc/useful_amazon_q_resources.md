@@ -18,3 +18,10 @@
 
 
 
+
+#### Cost Management with CEAC
+- [Getting Started with CEAC 2 (Cost Explorer and Analysis for Cloud)](https://aws.amazon.com/aws-cost-management/aws-cost-explorer/)
+- [Using Amazon Q to Optimize AWS Costs](https://aws.amazon.com/blogs/aws-cloud-financial-management/using-amazon-q-to-optimize-aws-costs/)
+- [Cost Optimization with Amazon Q Business](https://docs.aws.amazon.com/cost-management/latest/userguide/ce-rightsizing.html)
+- [CEAC 2 Advanced Features and Best Practices](https://aws.amazon.com/aws-cost-management/resources/)
+- [Automating Cost Optimization with Amazon Q and CEAC](https://community.aws/tutorials/cost-optimization-amazon-q)
