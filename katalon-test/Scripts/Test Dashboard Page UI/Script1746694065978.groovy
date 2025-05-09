@@ -81,13 +81,15 @@ try {
     KeywordUtil.logInfo("Testing date filter functionality")
     
     // Set start date (one week ago)
+    def startDate = moment().subtract(7, 'days').format('YYYY-MM-DD')
     WebUI.click(findTestObject('Object Repository/Page_Amazon Q Dashboard/input_Start Date_w-full border border-gray-_687918'))
-    WebUI.sendKeys(findTestObject('Object Repository/Page_Amazon Q Dashboard/input_Start Date_w-full border border-gray-_687918'), '2025-05-01')
+    WebUI.sendKeys(findTestObject('Object Repository/Page_Amazon Q Dashboard/input_Start Date_w-full border border-gray-_687918'), startDate)
     WebUI.sendKeys(findTestObject('Object Repository/Page_Amazon Q Dashboard/input_Start Date_w-full border border-gray-_687918'), Keys.chord(Keys.TAB))
     
     // Set end date (today)
+    def endDate = moment().format('YYYY-MM-DD')
     WebUI.click(findTestObject('Object Repository/Page_Amazon Q Dashboard/input_End Date_w-full border border-gray-30_cbf492'))
-    WebUI.sendKeys(findTestObject('Object Repository/Page_Amazon Q Dashboard/input_End Date_w-full border border-gray-30_cbf492'), '2025-05-07')
+    WebUI.sendKeys(findTestObject('Object Repository/Page_Amazon Q Dashboard/input_End Date_w-full border border-gray-30_cbf492'), endDate)
     WebUI.sendKeys(findTestObject('Object Repository/Page_Amazon Q Dashboard/input_End Date_w-full border border-gray-30_cbf492'), Keys.chord(Keys.TAB))
     
     // Apply filters
