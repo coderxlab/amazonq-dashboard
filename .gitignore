@@ -7,6 +7,22 @@ node_modules/   # Node.js dependencies at root level
 */node_modules/ # Node.js dependencies in subdirectories
 **/node_modules/ # Node.js dependencies anywhere in the project
 
+# Katalon Studio specific
+/katalon-test/bin/
+/katalon-test/Libs/
+/katalon-test/Reports/
+/katalon-test/.cache/
+/katalon-test/.classpath
+/katalon-test/.project
+/katalon-test/.settings/
+/katalon-test/Temp/
+/katalon-test/*.log
+/katalon-test/output/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
 # OS specific files
 .DS_Store
 .DS_Store?

@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<WebElementEntity>
+   <description></description>
+   <name>input_Start Date_w-full border border-gray-_687918</name>
+   <tag></tag>
+   <elementGuidId>74e06d8f-b021-475e-874a-182a39c5e43d</elementGuidId>
+   <selectorCollection>
+      <entry>
+         <key>XPATH</key>
+         <value>//input[@value='']</value>
+      </entry>
+      <entry>
+         <key>CSS</key>
+         <value></value>
+      </entry>
+   </selectorCollection>
+   <selectorMethod>XPATH</selectorMethod>
+   <smartLocatorCollection>
+      <entry>
+         <key>SMART_LOCATOR</key>
+         <value>internal:attr=[placeholder=&quot;Select start date&quot;i]</value>
+      </entry>
+   </smartLocatorCollection>
+   <smartLocatorEnabled>false</smartLocatorEnabled>
+   <useRalativeImagePath>true</useRalativeImagePath>
+   <webElementProperties>
+      <isSelected>false</isSelected>
+      <matchCondition>equals</matchCondition>
+      <name>tag</name>
+      <type>Main</type>
+      <value>input</value>
+      <webElementGuid>1a0fe1f0-cff2-413d-a2e8-dea72bfcd69b</webElementGuid>
+   </webElementProperties>
+   <webElementProperties>
+      <isSelected>true</isSelected>
+      <matchCondition>equals</matchCondition>
+      <name>type</name>
+      <type>Main</type>
+      <value>text</value>
+      <webElementGuid>59faa1ce-c06a-4c11-876d-17be5970ed5b</webElementGuid>
+   </webElementProperties>
+   <webElementProperties>
+      <isSelected>true</isSelected>
+      <matchCondition>equals</matchCondition>
+      <name>placeholder</name>
+      <type>Main</type>
+      <value>Select start date</value>
+      <webElementGuid>3388da03-01aa-4067-8e77-26977e1d54bc</webElementGuid>
+   </webElementProperties>
+   <webElementProperties>
+      <isSelected>false</isSelected>
+      <matchCondition>equals</matchCondition>
+      <name>class</name>
+      <type>Main</type>
+      <value>w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amazon-teal react-datepicker-ignore-onclickoutside</value>
+      <webElementGuid>a840a83e-c729-4891-89d7-cfe7d64e521e</webElementGuid>
+   </webElementProperties>
+   <webElementProperties>
+      <isSelected>false</isSelected>
+      <matchCondition>equals</matchCondition>
+      <name>xpath</name>
+      <type>Main</type>
+      <value>id(&quot;root&quot;)/div[@class=&quot;min-h-screen bg-gray-100&quot;]/div[@class=&quot;container mx-auto px-4 py-8&quot;]/div[1]/div[@class=&quot;bg-white p-4 rounded-lg shadow mb-6&quot;]/div[@class=&quot;grid grid-cols-1 md:grid-cols-4 gap-4&quot;]/div[2]/div[@class=&quot;react-datepicker-wrapper&quot;]/div[@class=&quot;react-datepicker__input-container&quot;]/input[@class=&quot;w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amazon-teal react-datepicker-ignore-onclickoutside&quot;]</value>
+      <webElementGuid>53e76bdf-af06-42db-8b8f-3efec9b62c9f</webElementGuid>
+   </webElementProperties>
+   <webElementXpaths>
+      <isSelected>true</isSelected>
+      <matchCondition>equals</matchCondition>
+      <name>xpath:attributes</name>
+      <type>Main</type>
+      <value>//input[@value='']</value>
+      <webElementGuid>bf90eec9-e340-41c3-90cc-f6894b1207ab</webElementGuid>
+   </webElementXpaths>
+   <webElementXpaths>
+      <isSelected>false</isSelected>
+      <matchCondition>equals</matchCondition>
+      <name>xpath:idRelative</name>
+      <type>Main</type>
+      <value>//div[@id='root']/div/div/div/div/div/div[2]/div/div/input</value>
+      <webElementGuid>a86716a8-f081-470c-9e2f-277f65e0c65f</webElementGuid>
+   </webElementXpaths>
+   <webElementXpaths>
+      <isSelected>false</isSelected>
+      <matchCondition>equals</matchCondition>
+      <name>xpath:position</name>
+      <type>Main</type>
+      <value>//input</value>
+      <webElementGuid>360ee3c2-b87f-4ddd-badd-7084bf5ed7e5</webElementGuid>
+   </webElementXpaths>
+   <webElementXpaths>
+      <isSelected>false</isSelected>
+      <matchCondition>equals</matchCondition>
+      <name>xpath:customAttributes</name>
+      <type>Main</type>
+      <value>//input[@type = 'text' and @placeholder = 'Select start date']</value>
+      <webElementGuid>34ca0141-0fea-49ce-818d-6926d90e11d2</webElementGuid>
+   </webElementXpaths>
+</WebElementEntity>

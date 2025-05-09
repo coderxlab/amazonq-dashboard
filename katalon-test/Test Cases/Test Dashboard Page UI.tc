@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseEntity>
+   <description></description>
+   <name>Test Dashboard Page UI</name>
+   <tag></tag>
+   <comment></comment>
+   <recordOption>OTHER</recordOption>
+   <testCaseGuid>3602c441-e7bf-4ea8-a58a-93558aacbfcf</testCaseGuid>
+</TestCaseEntity>
