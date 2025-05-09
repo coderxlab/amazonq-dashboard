@@ -18,6 +18,8 @@ import internal.GlobalVariable as GlobalVariable
 import org.openqa.selenium.Keys as Keys
 import com.kms.katalon.core.util.KeywordUtil
 import groovy.json.JsonSlurper
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 /**
  * Test Developer Productivity Dashboard - User Filter Test
@@ -81,13 +83,14 @@ try {
     KeywordUtil.logInfo("Testing date filter functionality")
     
     // Set start date (one week ago)
-    def startDate = moment().subtract(7, 'days').format('YYYY-MM-DD')
+    def today = LocalDate.now()
+    def startDate = today.minusDays(7).format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
     WebUI.click(findTestObject('Object Repository/Page_Amazon Q Dashboard/input_Start Date_w-full border border-gray-_687918'))
     WebUI.sendKeys(findTestObject('Object Repository/Page_Amazon Q Dashboard/input_Start Date_w-full border border-gray-_687918'), startDate)
     WebUI.sendKeys(findTestObject('Object Repository/Page_Amazon Q Dashboard/input_Start Date_w-full border border-gray-_687918'), Keys.chord(Keys.TAB))
     
     // Set end date (today)
-    def endDate = moment().format('YYYY-MM-DD')
+    def endDate = today.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
     WebUI.click(findTestObject('Object Repository/Page_Amazon Q Dashboard/input_End Date_w-full border border-gray-30_cbf492'))
     WebUI.sendKeys(findTestObject('Object Repository/Page_Amazon Q Dashboard/input_End Date_w-full border border-gray-30_cbf492'), endDate)
     WebUI.sendKeys(findTestObject('Object Repository/Page_Amazon Q Dashboard/input_End Date_w-full border border-gray-30_cbf492'), Keys.chord(Keys.TAB))
