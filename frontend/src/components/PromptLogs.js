@@ -37,11 +37,11 @@ const PromptLogs = () => {
         });
         
         setLogs(response.data);
-        setPagination({
-          ...pagination,
+        setPagination(prevPagination => ({
+          ...prevPagination,
           total: response.total,
           totalPages: response.totalPages
-        });
+        }));
         
         // Calculate data quality metrics
         calculateDataQualityMetrics(response.data);

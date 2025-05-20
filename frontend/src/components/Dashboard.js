@@ -13,6 +13,7 @@ import {
 } from 'chart.js';
 import FilterControls from './FilterControls';
 import SummaryCard from './SummaryCard';
+import AcceptanceRateChart from './AcceptanceRateChart';
 import { getActivitySummary } from '../services/api';
 
 // Register ChartJS components
@@ -202,6 +203,11 @@ const Dashboard = () => {
                 )}
               </div>
             </div>
+          </div>
+          
+          {/* Acceptance Rate Trends Chart */}
+          <div className="mb-8">
+            <AcceptanceRateChart filters={filters} />
           </div>
           
           {/* User Activity Table */}

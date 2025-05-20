@@ -117,10 +117,10 @@ app.get('/api/activity', async (req, res) => {
   }
 });
 
-// Get activity summary metrics
-app.get('/api/activity/summary', async (req, res) => {
+// Get acceptance rate trends with time granularity
+app.get('/api/activity/acceptance-rate-trends', async (req, res) => {
   try {
-    const { userId, startDate, endDate } = req.query;
+    const { userId, startDate, endDate, granularity = 'daily', compareWithPrevious = 'false' } = req.query;
     
     let params = {
       TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE
@@ -138,9 +138,19 @@ app.get('/api/activity/summary', async (req, res) => {
     
     // Filter by date range if provided
     let results = scanResults.Items;
+    let previousPeriodResults = [];
+    
     if (startDate && endDate) {
       const startMoment = moment(startDate).startOf('day');
       const endMoment = moment(endDate).endOf('day');
+      
+      // Calculate previous period date range if comparison is requested
+      let previousStartMoment, previousEndMoment;
+      if (compareWithPrevious === 'true') {
+        const periodDuration = endMoment.diff(startMoment, 'days') + 1;
+        previousEndMoment = startMoment.clone().subtract(1, 'days');
+        previousStartMoment = previousEndMoment.clone().subtract(periodDuration - 1, 'days');
+      }
       
       results = results.filter(item => {
         // Handle different date formats
@@ -170,81 +180,114 @@ app.get('/api/activity/summary', async (req, res) => {
           return false;
         }
         
+        // If comparison is requested, also collect previous period data
+        if (compareWithPrevious === 'true' && 
+            itemDate.isBetween(previousStartMoment, previousEndMoment, null, '[]')) {
+          previousPeriodResults.push(item);
+        }
+        
         return itemDate.isBetween(startMoment, endMoment, null, '[]');
       });
     }
     
-    // Calculate summary metrics
-    const summary = {
-      totalAICodeLines: 0,
-      totalChatInteractions: 0,
-      totalInlineSuggestions: 0,
-      totalInlineAcceptances: 0,
-      acceptanceRate: 0,
-      byUser: {},
-      byDate: {}
+    // Group data by the specified granularity
+    const groupedData = {};
+    const previousGroupedData = {};
+    
+    // Helper function to get the group key based on granularity
+    const getGroupKey = (dateStr, granularity) => {
+      const date = moment(dateStr);
+      switch (granularity) {
+        case 'weekly':
+          // Format: YYYY-WW (year and week number)
+          return `${date.year()}-W${date.isoWeek().toString().padStart(2, '0')}`;
+        case 'monthly':
+          // Format: YYYY-MM (year and month)
+          return date.format('YYYY-MM');
+        case 'daily':
+        default:
+          // Format: YYYY-MM-DD
+          return date.format('YYYY-MM-DD');
+      }
     };
     
+    // Group current period data
     results.forEach(item => {
-      // Parse numeric values (handling potential undefined values)
-      const chatAICodeLines = parseInt(item.Chat_AICodeLines || 0);
-      const chatMessagesInteracted = parseInt(item.Chat_MessagesInteracted || 0);
-      const inlineAICodeLines = parseInt(item.Inline_AICodeLines || 0);
+      const groupKey = getGroupKey(item.Date, granularity);
+      
+      if (!groupedData[groupKey]) {
+        groupedData[groupKey] = {
+          period: groupKey,
+          inlineSuggestions: 0,
+          inlineAcceptances: 0,
+          acceptanceRate: 0
+        };
+      }
+      
       const inlineAcceptanceCount = parseInt(item.Inline_AcceptanceCount || 0);
       const inlineSuggestionsCount = parseInt(item.Inline_SuggestionsCount || 0);
       
-      // Update summary totals
-      summary.totalAICodeLines += chatAICodeLines + inlineAICodeLines;
-      summary.totalChatInteractions += chatMessagesInteracted;
-      summary.totalInlineSuggestions += inlineSuggestionsCount;
-      summary.totalInlineAcceptances += inlineAcceptanceCount;
-      
-      // Track by user
-      if (!summary.byUser[item.UserId]) {
-        summary.byUser[item.UserId] = {
-          userId: item.UserId,
-          aiCodeLines: 0,
-          chatInteractions: 0,
-          inlineSuggestions: 0,
-          inlineAcceptances: 0
-        };
-      }
-      
-      summary.byUser[item.UserId].aiCodeLines += chatAICodeLines + inlineAICodeLines;
-      summary.byUser[item.UserId].chatInteractions += chatMessagesInteracted;
-      summary.byUser[item.UserId].inlineSuggestions += inlineSuggestionsCount;
-      summary.byUser[item.UserId].inlineAcceptances += inlineAcceptanceCount;
-      
-      // Track by date
-      if (!summary.byDate[item.Date]) {
-        summary.byDate[item.Date] = {
-          date: item.Date,
-          aiCodeLines: 0,
-          chatInteractions: 0,
-          inlineSuggestions: 0,
-          inlineAcceptances: 0
-        };
-      }
-      
-      summary.byDate[item.Date].aiCodeLines += chatAICodeLines + inlineAICodeLines;
-      summary.byDate[item.Date].chatInteractions += chatMessagesInteracted;
-      summary.byDate[item.Date].inlineSuggestions += inlineSuggestionsCount;
-      summary.byDate[item.Date].inlineAcceptances += inlineAcceptanceCount;
+      groupedData[groupKey].inlineSuggestions += inlineSuggestionsCount;
+      groupedData[groupKey].inlineAcceptances += inlineAcceptanceCount;
     });
     
-    // Calculate acceptance rate
-    if (summary.totalInlineSuggestions > 0) {
-      summary.acceptanceRate = (summary.totalInlineAcceptances / summary.totalInlineSuggestions) * 100;
+    // Calculate acceptance rates for current period
+    Object.values(groupedData).forEach(group => {
+      if (group.inlineSuggestions > 0) {
+        group.acceptanceRate = (group.inlineAcceptances / group.inlineSuggestions) * 100;
+      }
+    });
+    
+    // Group previous period data if comparison is requested
+    if (compareWithPrevious === 'true') {
+      previousPeriodResults.forEach(item => {
+        const groupKey = getGroupKey(item.Date, granularity);
+        
+        if (!previousGroupedData[groupKey]) {
+          previousGroupedData[groupKey] = {
+            period: groupKey,
+            inlineSuggestions: 0,
+            inlineAcceptances: 0,
+            acceptanceRate: 0
+          };
+        }
+        
+        const inlineAcceptanceCount = parseInt(item.Inline_AcceptanceCount || 0);
+        const inlineSuggestionsCount = parseInt(item.Inline_SuggestionsCount || 0);
+        
+        previousGroupedData[groupKey].inlineSuggestions += inlineSuggestionsCount;
+        previousGroupedData[groupKey].inlineAcceptances += inlineAcceptanceCount;
+      });
+      
+      // Calculate acceptance rates for previous period
+      Object.values(previousGroupedData).forEach(group => {
+        if (group.inlineSuggestions > 0) {
+          group.acceptanceRate = (group.inlineAcceptances / group.inlineSuggestions) * 100;
+        }
+      });
     }
     
-    // Convert byUser and byDate objects to arrays for easier frontend processing
-    summary.byUser = Object.values(summary.byUser);
-    summary.byDate = Object.values(summary.byDate).sort((a, b) => moment(a.date).diff(moment(b.date)));
+    // Convert to arrays and sort by period
+    const currentPeriodData = Object.values(groupedData).sort((a, b) => {
+      return moment(a.period, 'YYYY-MM-DD').diff(moment(b.period, 'YYYY-MM-DD'));
+    });
     
-    res.json(summary);
+    const previousPeriodData = Object.values(previousGroupedData).sort((a, b) => {
+      return moment(a.period, 'YYYY-MM-DD').diff(moment(b.period, 'YYYY-MM-DD'));
+    });
+    
+    // Format response
+    const response = {
+      granularity,
+      currentPeriod: currentPeriodData,
+      hasPreviousPeriod: compareWithPrevious === 'true',
+      previousPeriod: compareWithPrevious === 'true' ? previousPeriodData : []
+    };
+    
+    res.json(response);
   } catch (error) {
-    console.error('Error fetching activity summary:', error);
-    res.status(500).json({ error: 'Failed to fetch activity summary' });
+    console.error('Error fetching acceptance rate trends:', error);
+    res.status(500).json({ error: 'Failed to fetch acceptance rate trends' });
   }
 });
 

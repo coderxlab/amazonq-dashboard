@@ -75,3 +75,22 @@ export const getPromptLogs = async (filters = {}) => {
     throw error;
   }
 };
+
+export const getAcceptanceRateTrends = async (filters = {}) => {
+  try {
+    const { userId, startDate, endDate, granularity = 'daily', compareWithPrevious = false } = filters;
+    const params = {};
+    
+    if (userId) params.userId = userId;
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
+    if (granularity) params.granularity = granularity;
+    if (compareWithPrevious !== undefined) params.compareWithPrevious = compareWithPrevious.toString();
+    
+    const response = await api.get('/activity/acceptance-rate-trends', { params });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching acceptance rate trends:', error);
+    throw error;
+  }
+};
