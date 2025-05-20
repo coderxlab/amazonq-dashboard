@@ -57,7 +57,7 @@ export const getActivitySummary = async (filters = {}) => {
 
 export const getPromptLogs = async (filters = {}) => {
   try {
-    const { userId, startDate, endDate, searchTerm, page, limit } = filters;
+    const { userId, startDate, endDate, searchTerm, page, limit, includeEmpty } = filters;
     const params = {};
     
     if (userId) params.userId = userId;
@@ -66,6 +66,7 @@ export const getPromptLogs = async (filters = {}) => {
     if (searchTerm) params.searchTerm = searchTerm;
     if (page) params.page = page;
     if (limit) params.limit = limit;
+    if (includeEmpty !== undefined) params.includeEmpty = includeEmpty;
     
     const response = await api.get('/prompts', { params });
     return response.data;
