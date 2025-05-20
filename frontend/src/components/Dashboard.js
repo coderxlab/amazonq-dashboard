@@ -13,7 +13,9 @@ import {
 } from 'chart.js';
 import FilterControls from './FilterControls';
 import SummaryCard from './SummaryCard';
-import { getActivitySummary } from '../services/api';
+import ComparisonChart from './ComparisonChart';
+import { getActivitySummary, getComparativeMetrics } from '../services/api';
+import moment from 'moment';
 
 // Register ChartJS components
 ChartJS.register(
@@ -29,6 +31,7 @@ ChartJS.register(
 
 const Dashboard = () => {
   const [summaryData, setSummaryData] = useState(null);
+  const [comparisonData, setComparisonData] = useState(null);
   const [filters, setFilters] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -40,6 +43,23 @@ const Dashboard = () => {
       try {
         const data = await getActivitySummary(filters);
         setSummaryData(data);
+
+        // Fetch comparative data for the previous period
+        const { startDate, endDate } = filters;
+        if (startDate && endDate) {
+          const start = moment(startDate);
+          const end = moment(endDate);
+          const duration = moment.duration(end.diff(start));
+          const compareStartDate = start.clone().subtract(duration).format('YYYY-MM-DD');
+          const compareEndDate = start.clone().subtract(1, 'day').format('YYYY-MM-DD');
+
+          const compareData = await getComparativeMetrics({
+            ...filters,
+            compareStartDate,
+            compareEndDate
+          });
+          setComparisonData(compareData);
+        }
       } catch (err) {
         setError('Failed to fetch dashboard data');
         console.error(err);
@@ -175,6 +195,34 @@ const Dashboard = () => {
               color="bg-purple-500 text-white"
             />
           </div>
+          
+          {/* Comparative Metrics */}
+          {comparisonData && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              <ComparisonChart
+                currentData={comparisonData.current}
+                previousData={comparisonData.previous}
+                title="AI Code Lines Comparison"
+                metric="aiCodeLines"
+                currentDateRange={{ start: filters.startDate, end: filters.endDate }}
+                previousDateRange={{ 
+                  start: moment(filters.startDate).subtract(moment(filters.endDate).diff(moment(filters.startDate))).format('YYYY-MM-DD'),
+                  end: moment(filters.startDate).subtract(1, 'day').format('YYYY-MM-DD')
+                }}
+              />
+              <ComparisonChart
+                currentData={comparisonData.current}
+                previousData={comparisonData.previous}
+                title="Chat Interactions Comparison"
+                metric="chatInteractions"
+                currentDateRange={{ start: filters.startDate, end: filters.endDate }}
+                previousDateRange={{ 
+                  start: moment(filters.startDate).subtract(moment(filters.endDate).diff(moment(filters.startDate))).format('YYYY-MM-DD'),
+                  end: moment(filters.startDate).subtract(1, 'day').format('YYYY-MM-DD')
+                }}
+              />
+            </div>
+          )}
           
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
