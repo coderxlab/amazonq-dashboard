@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import FilterControls from './FilterControls';
-import PromptLogCard from './PromptLogCard';
 import { getPromptLogs } from '../services/api';
 
 const PromptLogs = () => {
@@ -9,18 +8,11 @@ const PromptLogs = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [includeEmpty, setIncludeEmpty] = useState(false);
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
     total: 0,
     totalPages: 0
-  });
-  const [dataQualityMetrics, setDataQualityMetrics] = useState({
-    total: 0,
-    emptyPrompts: 0,
-    emptyResponses: 0,
-    bothEmpty: 0
   });
 
   useEffect(() => {
@@ -32,19 +24,15 @@ const PromptLogs = () => {
           ...filters,
           searchTerm,
           page: pagination.page,
-          limit: pagination.limit,
-          includeEmpty: includeEmpty ? 'true' : 'false'
+          limit: pagination.limit
         });
         
         setLogs(response.data);
-        setPagination({
-          ...pagination,
+        setPagination(prevPagination => ({
+          ...prevPagination,
           total: response.total,
           totalPages: response.totalPages
-        });
-        
-        // Calculate data quality metrics
-        calculateDataQualityMetrics(response.data);
+        }));
       } catch (err) {
         setError('Failed to fetch prompt logs');
         console.error(err);
@@ -54,33 +42,20 @@ const PromptLogs = () => {
     };
 
     fetchLogs();
-  }, [filters, searchTerm, pagination.page, pagination.limit, includeEmpty]);
-
-  const calculateDataQualityMetrics = (data) => {
-    const metrics = {
-      total: data.length,
-      emptyPrompts: data.filter(log => !log.Prompt || log.Prompt.trim() === '').length,
-      emptyResponses: data.filter(log => !log.Response || log.Response.trim() === '').length,
-      bothEmpty: data.filter(log => 
-        (!log.Prompt || log.Prompt.trim() === '') && 
-        (!log.Response || log.Response.trim() === '')
-      ).length
-    };
-    setDataQualityMetrics(metrics);
-  };
+  }, [filters, searchTerm, pagination.page, pagination.limit]);
 
   const handleFilterChange = (newFilters) => {
     setFilters(newFilters);
-    setPagination({ ...pagination, page: 1 }); // Reset to first page when filters change
+    setPagination(prevPagination => ({ ...prevPagination, page: 1 })); // Reset to first page when filters change
   };
 
   const handleSearch = (e) => {
     e.preventDefault();
-    setPagination({ ...pagination, page: 1 }); // Reset to first page when search changes
+    setPagination(prevPagination => ({ ...prevPagination, page: 1 })); // Reset to first page when search changes
   };
 
   const handlePageChange = (newPage) => {
-    setPagination({ ...pagination, page: newPage });
+    setPagination(prevPagination => ({ ...prevPagination, page: newPage }));
   };
 
   const handleExportCSV = () => {
@@ -114,6 +89,12 @@ const PromptLogs = () => {
     document.body.removeChild(link);
   };
 
+  // Function to truncate long text
+  const truncateText = (text, maxLength = 100) => {
+    if (!text) return '';
+    return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+  };
+
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">Prompt Log Viewer</h1>
@@ -124,22 +105,11 @@ const PromptLogs = () => {
         <div className="flex flex-col md:flex-row justify-between items-center mb-4">
           <h2 className="text-lg font-semibold">Prompt Logs</h2>
           
-          <div className="flex flex-col md:flex-row mt-4 md:mt-0 space-y-2 md:space-y-0 md:space-x-4">
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="includeEmpty"
-                checked={includeEmpty}
-                onChange={(e) => setIncludeEmpty(e.target.checked)}
-                className="mr-2"
-              />
-              <label htmlFor="includeEmpty" className="text-sm">Include empty records</label>
-            </div>
-            
-            <form onSubmit={handleSearch} className="flex">
+          <div className="flex mt-4 md:mt-0">
+            <form onSubmit={handleSearch} className="flex mr-2">
               <input
                 type="text"
-                placeholder="Search prompts & responses..."
+                placeholder="Search prompts..."
                 className="border border-gray-300 rounded-l-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amazon-teal"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -161,29 +131,6 @@ const PromptLogs = () => {
           </div>
         </div>
         
-        {/* Data Quality Metrics */}
-        <div className="bg-gray-50 p-4 rounded-lg mb-4">
-          <h3 className="text-sm font-semibold mb-2">Data Quality Metrics</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <p className="text-xs text-gray-500">Total Records</p>
-              <p className="text-lg font-semibold">{dataQualityMetrics.total}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Empty Prompts</p>
-              <p className="text-lg font-semibold">{dataQualityMetrics.emptyPrompts}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Empty Responses</p>
-              <p className="text-lg font-semibold">{dataQualityMetrics.emptyResponses}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Both Empty</p>
-              <p className="text-lg font-semibold">{dataQualityMetrics.bothEmpty}</p>
-            </div>
-          </div>
-        </div>
-        
         {loading && (
           <div className="flex justify-center items-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amazon-teal"></div>
@@ -198,22 +145,60 @@ const PromptLogs = () => {
         
         {!loading && !error && (
           <>
-            {/* Card-based layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {logs.length > 0 ? (
-                logs.map((log) => (
-                  <PromptLogCard key={`${log.UserId}-${log.TimeStamp}`} log={log} />
-                ))
-              ) : (
-                <div className="col-span-2 py-8 text-center text-gray-500">
-                  No prompt logs found
-                </div>
-              )}
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Timestamp
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      User ID
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Prompt
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Response
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {logs.length > 0 ? (
+                    logs.map((log) => (
+                      <tr key={`${log.UserId}-${log.TimeStamp}`}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(log.TimeStamp).toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {log.UserId.substring(log.UserId.length - 8)}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-500">
+                          <div className="max-w-xs">
+                            {truncateText(log.Prompt)}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-500">
+                          <div className="max-w-xs">
+                            {truncateText(log.Response)}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="4" className="px-6 py-4 text-center text-sm text-gray-500">
+                        No prompt logs found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
             
             {/* Pagination */}
             {pagination.totalPages > 1 && (
-              <div className="flex justify-between items-center mt-6">
+              <div className="flex justify-between items-center mt-4">
                 <div className="text-sm text-gray-700">
                   Showing <span className="font-medium">{(pagination.page - 1) * pagination.limit + 1}</span> to{' '}
                   <span className="font-medium">
