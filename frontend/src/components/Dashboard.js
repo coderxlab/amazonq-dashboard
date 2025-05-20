@@ -13,7 +13,6 @@ import {
 } from 'chart.js';
 import FilterControls from './FilterControls';
 import SummaryCard from './SummaryCard';
-import AcceptanceRateChart from './AcceptanceRateChart';
 import { getActivitySummary } from '../services/api';
 
 // Register ChartJS components
@@ -30,7 +29,7 @@ ChartJS.register(
 
 const Dashboard = () => {
   const [summaryData, setSummaryData] = useState(null);
-  const [filters, setFilters] = useState({});
+  const [filters, setFilters] = useState({ granularity: 'daily' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -51,6 +50,72 @@ const Dashboard = () => {
 
     fetchData();
   }, [filters]);
+
+  // Prepare chart data for Acceptance Rate Time Series
+  const prepareAcceptanceRateChartData = () => {
+    if (!summaryData || !summaryData.acceptanceRateTimeSeries) return null;
+    
+    const { current, previous, granularity } = summaryData.acceptanceRateTimeSeries;
+    
+    // Get all dates from both current and previous periods
+    const allDates = [...new Set([
+      ...Object.keys(current),
+      ...Object.keys(previous)
+    ])].sort((a, b) => {
+      // Sort by date, handling different formats based on granularity
+      if (granularity === 'weekly') {
+        // Extract year and week number for comparison
+        const [aYear, aWeek] = a.split('-W').map(Number);
+        const [bYear, bWeek] = b.split('-W').map(Number);
+        return aYear !== bYear ? aYear - bYear : aWeek - bWeek;
+      } else if (granularity === 'monthly') {
+        return a.localeCompare(b);
+      } else {
+        return a.localeCompare(b);
+      }
+    });
+    
+    // Format labels based on granularity
+    const labels = allDates.map(date => {
+      if (granularity === 'weekly') {
+        const [year, week] = date.split('-W');
+        return `Week ${week}, ${year}`;
+      } else if (granularity === 'monthly') {
+        const [year, month] = date.split('-');
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        return `${monthNames[parseInt(month) - 1]} ${year}`;
+      } else {
+        // Format daily dates to be more readable
+        const [year, month, day] = date.split('-');
+        return `${month}/${day}/${year}`;
+      }
+    });
+    
+    return {
+      labels,
+      datasets: [
+        {
+          label: 'Current Period',
+          data: allDates.map(date => current[date] || 0),
+          borderColor: 'rgba(0, 161, 201, 1)',
+          backgroundColor: 'rgba(0, 161, 201, 0.2)',
+          tension: 0.4,
+          fill: false,
+          pointRadius: 4,
+        },
+        {
+          label: 'Previous Period',
+          data: allDates.map(date => previous[date] || 0),
+          borderColor: 'rgba(128, 128, 128, 0.8)',
+          backgroundColor: 'rgba(128, 128, 128, 0.2)',
+          tension: 0.4,
+          fill: false,
+          pointRadius: 3,
+          borderDash: [5, 5],
+        },
+      ],
+    };
+  };
 
   // Prepare chart data for AI Code Lines per Developer
   const prepareBarChartData = () => {
@@ -80,7 +145,7 @@ const Dashboard = () => {
       ],
     };
   };
-
+  
   // Prepare chart data for AI Code Lines over Time
   const prepareLineChartData = () => {
     if (!summaryData || !summaryData.byDate || summaryData.byDate.length === 0) return null;
@@ -110,6 +175,7 @@ const Dashboard = () => {
 
   const barChartData = prepareBarChartData();
   const lineChartData = prepareLineChartData();
+  const acceptanceRateChartData = prepareAcceptanceRateChartData();
 
   const chartOptions = {
     responsive: true,
@@ -205,9 +271,38 @@ const Dashboard = () => {
             </div>
           </div>
           
-          {/* Acceptance Rate Trends Chart */}
-          <div className="mb-8">
-            <AcceptanceRateChart filters={filters} />
+          {/* Acceptance Rate Time Series Chart */}
+          <div className="bg-white p-4 rounded-lg shadow mb-8">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold">Acceptance Rate Trends</h2>
+              <div className="text-sm text-gray-500">
+                Granularity: <span className="font-medium">{filters.granularity || 'daily'}</span>
+              </div>
+            </div>
+            <div className="h-80">
+              {acceptanceRateChartData ? (
+                <Line 
+                  data={acceptanceRateChartData} 
+                  options={{
+                    ...chartOptions,
+                    scales: {
+                      y: {
+                        beginAtZero: true,
+                        max: 100,
+                        title: {
+                          display: true,
+                          text: 'Acceptance Rate (%)'
+                        }
+                      }
+                    }
+                  }} 
+                />
+              ) : (
+                <div className="flex justify-center items-center h-full text-gray-500">
+                  No acceptance rate data available
+                </div>
+              )}
+            </div>
           </div>
           
           {/* User Activity Table */}

@@ -17,6 +17,33 @@ app.use(cors({
 // Middleware
 app.use(express.json());
 
+// Authorization middleware
+const authorize = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  
+  // For development purposes, you can bypass this check with an environment variable
+  if (process.env.BYPASS_AUTH === 'true') {
+    return next();
+  }
+  
+  if (!authHeader) {
+    return res.status(401).json({ error: 'Authorization header is required' });
+  }
+  
+  // In a production environment, you would validate the token with your auth provider
+  // For now, we'll just check if the header exists and has a basic format
+  if (!authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Invalid authorization format' });
+  }
+  
+  // In a real implementation, you would verify the token here
+  // const token = authHeader.split(' ')[1];
+  // verifyToken(token).then(user => { req.user = user; next(); }).catch(err => res.status(401).json({ error: 'Invalid token' }));
+  
+  // For now, we'll just proceed
+  next();
+};
+
 // Configure AWS
 AWS.config.update({
   region: process.env.AWS_REGION || 'us-east-1',
@@ -117,10 +144,11 @@ app.get('/api/activity', async (req, res) => {
   }
 });
 
-// Get acceptance rate trends with time granularity
-app.get('/api/activity/acceptance-rate-trends', async (req, res) => {
+
+// Get activity summary metrics
+app.get('/api/activity/summary', authorize, async (req, res) => {
   try {
-    const { userId, startDate, endDate, granularity = 'daily', compareWithPrevious = 'false' } = req.query;
+    const { userId, startDate, endDate, granularity = 'daily' } = req.query;
     
     let params = {
       TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE
@@ -144,13 +172,10 @@ app.get('/api/activity/acceptance-rate-trends', async (req, res) => {
       const startMoment = moment(startDate).startOf('day');
       const endMoment = moment(endDate).endOf('day');
       
-      // Calculate previous period date range if comparison is requested
-      let previousStartMoment, previousEndMoment;
-      if (compareWithPrevious === 'true') {
-        const periodDuration = endMoment.diff(startMoment, 'days') + 1;
-        previousEndMoment = startMoment.clone().subtract(1, 'days');
-        previousStartMoment = previousEndMoment.clone().subtract(periodDuration - 1, 'days');
-      }
+      // Calculate previous period date range for comparison
+      const currentPeriodDays = endMoment.diff(startMoment, 'days') + 1;
+      const previousPeriodStartMoment = moment(startMoment).subtract(currentPeriodDays, 'days');
+      const previousPeriodEndMoment = moment(startMoment).subtract(1, 'days');
       
       results = results.filter(item => {
         // Handle different date formats
@@ -180,114 +205,209 @@ app.get('/api/activity/acceptance-rate-trends', async (req, res) => {
           return false;
         }
         
-        // If comparison is requested, also collect previous period data
-        if (compareWithPrevious === 'true' && 
-            itemDate.isBetween(previousStartMoment, previousEndMoment, null, '[]')) {
+        // Check if item is in the previous period for comparison
+        const isInPreviousPeriod = itemDate.isBetween(previousPeriodStartMoment, previousPeriodEndMoment, null, '[]');
+        if (isInPreviousPeriod) {
           previousPeriodResults.push(item);
+          return false;
         }
         
         return itemDate.isBetween(startMoment, endMoment, null, '[]');
       });
     }
     
-    // Group data by the specified granularity
-    const groupedData = {};
-    const previousGroupedData = {};
-    
-    // Helper function to get the group key based on granularity
-    const getGroupKey = (dateStr, granularity) => {
-      const date = moment(dateStr);
-      switch (granularity) {
-        case 'weekly':
-          // Format: YYYY-WW (year and week number)
-          return `${date.year()}-W${date.isoWeek().toString().padStart(2, '0')}`;
-        case 'monthly':
-          // Format: YYYY-MM (year and month)
-          return date.format('YYYY-MM');
-        case 'daily':
-        default:
-          // Format: YYYY-MM-DD
-          return date.format('YYYY-MM-DD');
+    // Calculate summary metrics
+    const summary = {
+      totalAICodeLines: 0,
+      totalChatInteractions: 0,
+      totalInlineSuggestions: 0,
+      totalInlineAcceptances: 0,
+      acceptanceRate: 0,
+      byUser: {},
+      byDate: {},
+      acceptanceRateTimeSeries: {
+        current: {},
+        previous: {},
+        granularity: granularity
       }
     };
     
-    // Group current period data
+    // Process current period results
     results.forEach(item => {
-      const groupKey = getGroupKey(item.Date, granularity);
+      // Parse numeric values (handling potential undefined values)
+      const chatAICodeLines = parseInt(item.Chat_AICodeLines || 0);
+      const chatMessagesInteracted = parseInt(item.Chat_MessagesInteracted || 0);
+      const inlineAICodeLines = parseInt(item.Inline_AICodeLines || 0);
+      const inlineAcceptanceCount = parseInt(item.Inline_AcceptanceCount || 0);
+      const inlineSuggestionsCount = parseInt(item.Inline_SuggestionsCount || 0);
       
-      if (!groupedData[groupKey]) {
-        groupedData[groupKey] = {
-          period: groupKey,
+      // Update summary totals
+      summary.totalAICodeLines += chatAICodeLines + inlineAICodeLines;
+      summary.totalChatInteractions += chatMessagesInteracted;
+      summary.totalInlineSuggestions += inlineSuggestionsCount;
+      summary.totalInlineAcceptances += inlineAcceptanceCount;
+      
+      // Track by user
+      if (!summary.byUser[item.UserId]) {
+        summary.byUser[item.UserId] = {
+          userId: item.UserId,
+          aiCodeLines: 0,
+          chatInteractions: 0,
+          inlineSuggestions: 0,
+          inlineAcceptances: 0
+        };
+      }
+      
+      summary.byUser[item.UserId].aiCodeLines += chatAICodeLines + inlineAICodeLines;
+      summary.byUser[item.UserId].chatInteractions += chatMessagesInteracted;
+      summary.byUser[item.UserId].inlineSuggestions += inlineSuggestionsCount;
+      summary.byUser[item.UserId].inlineAcceptances += inlineAcceptanceCount;
+      
+      // Track by date for time series
+      let dateKey = item.Date;
+      let itemDate;
+      
+      // Parse the date to ensure consistent format
+      if (typeof item.Date === 'string') {
+        if (item.Date.includes('-')) {
+          itemDate = moment(item.Date);
+        } else if (item.Date.includes('/')) {
+          itemDate = moment(item.Date, 'MM/DD/YYYY');
+        } else {
+          itemDate = moment(item.Date, 'MM-DD-YYYY');
+        }
+      } else if (item.Date && item.Date.S) {
+        itemDate = moment(item.Date.S);
+      } else {
+        itemDate = moment(); // Fallback
+      }
+      
+      // Format the date key based on granularity
+      if (granularity === 'weekly') {
+        // Use the week number and year as the key
+        dateKey = `${itemDate.year()}-W${itemDate.isoWeek()}`;
+      } else if (granularity === 'monthly') {
+        // Use the month and year as the key
+        dateKey = itemDate.format('YYYY-MM');
+      } else {
+        // Default to daily
+        dateKey = itemDate.format('YYYY-MM-DD');
+      }
+      
+      // Initialize the date entry if it doesn't exist
+      if (!summary.byDate[dateKey]) {
+        summary.byDate[dateKey] = {
+          date: dateKey,
+          aiCodeLines: 0,
+          chatInteractions: 0,
           inlineSuggestions: 0,
           inlineAcceptances: 0,
           acceptanceRate: 0
         };
       }
       
+      // Update the date entry
+      summary.byDate[dateKey].aiCodeLines += chatAICodeLines + inlineAICodeLines;
+      summary.byDate[dateKey].chatInteractions += chatMessagesInteracted;
+      summary.byDate[dateKey].inlineSuggestions += inlineSuggestionsCount;
+      summary.byDate[dateKey].inlineAcceptances += inlineAcceptanceCount;
+      
+      // Calculate acceptance rate for this date
+      if (summary.byDate[dateKey].inlineSuggestions > 0) {
+        summary.byDate[dateKey].acceptanceRate = 
+          (summary.byDate[dateKey].inlineAcceptances / summary.byDate[dateKey].inlineSuggestions) * 100;
+      }
+      
+      // Add to acceptance rate time series
+      summary.acceptanceRateTimeSeries.current[dateKey] = summary.byDate[dateKey].acceptanceRate;
+    });
+    
+    // Process previous period results for comparison
+    const previousPeriodByDate = {};
+    
+    previousPeriodResults.forEach(item => {
       const inlineAcceptanceCount = parseInt(item.Inline_AcceptanceCount || 0);
       const inlineSuggestionsCount = parseInt(item.Inline_SuggestionsCount || 0);
       
-      groupedData[groupKey].inlineSuggestions += inlineSuggestionsCount;
-      groupedData[groupKey].inlineAcceptances += inlineAcceptanceCount;
+      // Parse the date
+      let itemDate;
+      if (typeof item.Date === 'string') {
+        if (item.Date.includes('-')) {
+          itemDate = moment(item.Date);
+        } else if (item.Date.includes('/')) {
+          itemDate = moment(item.Date, 'MM/DD/YYYY');
+        } else {
+          itemDate = moment(item.Date, 'MM-DD-YYYY');
+        }
+      } else if (item.Date && item.Date.S) {
+        itemDate = moment(item.Date.S);
+      } else {
+        itemDate = moment(); // Fallback
+      }
+      
+      // Calculate the offset to align with current period
+      const startMoment = moment(startDate);
+      const daysDiff = itemDate.diff(moment(previousPeriodStartMoment), 'days');
+      const alignedDate = moment(startMoment).add(daysDiff, 'days');
+      
+      // Format the date key based on granularity
+      let dateKey;
+      if (granularity === 'weekly') {
+        dateKey = `${alignedDate.year()}-W${alignedDate.isoWeek()}`;
+      } else if (granularity === 'monthly') {
+        dateKey = alignedDate.format('YYYY-MM');
+      } else {
+        dateKey = alignedDate.format('YYYY-MM-DD');
+      }
+      
+      // Initialize the date entry if it doesn't exist
+      if (!previousPeriodByDate[dateKey]) {
+        previousPeriodByDate[dateKey] = {
+          inlineSuggestions: 0,
+          inlineAcceptances: 0,
+          acceptanceRate: 0
+        };
+      }
+      
+      // Update the date entry
+      previousPeriodByDate[dateKey].inlineSuggestions += inlineSuggestionsCount;
+      previousPeriodByDate[dateKey].inlineAcceptances += inlineAcceptanceCount;
+      
+      // Calculate acceptance rate for this date
+      if (previousPeriodByDate[dateKey].inlineSuggestions > 0) {
+        previousPeriodByDate[dateKey].acceptanceRate = 
+          (previousPeriodByDate[dateKey].inlineAcceptances / previousPeriodByDate[dateKey].inlineSuggestions) * 100;
+      }
+      
+      // Add to previous period time series
+      summary.acceptanceRateTimeSeries.previous[dateKey] = previousPeriodByDate[dateKey].acceptanceRate;
     });
     
-    // Calculate acceptance rates for current period
-    Object.values(groupedData).forEach(group => {
-      if (group.inlineSuggestions > 0) {
-        group.acceptanceRate = (group.inlineAcceptances / group.inlineSuggestions) * 100;
+    // Calculate overall acceptance rate
+    if (summary.totalInlineSuggestions > 0) {
+      summary.acceptanceRate = (summary.totalInlineAcceptances / summary.totalInlineSuggestions) * 100;
+    }
+    
+    // Convert byUser and byDate objects to arrays for easier frontend processing
+    summary.byUser = Object.values(summary.byUser);
+    summary.byDate = Object.values(summary.byDate).sort((a, b) => {
+      // Sort by date, handling different formats based on granularity
+      if (granularity === 'weekly') {
+        // Extract year and week number for comparison
+        const [aYear, aWeek] = a.date.split('-W').map(Number);
+        const [bYear, bWeek] = b.date.split('-W').map(Number);
+        return aYear !== bYear ? aYear - bYear : aWeek - bWeek;
+      } else if (granularity === 'monthly') {
+        return moment(a.date, 'YYYY-MM').diff(moment(b.date, 'YYYY-MM'));
+      } else {
+        return moment(a.date).diff(moment(b.date));
       }
     });
     
-    // Group previous period data if comparison is requested
-    if (compareWithPrevious === 'true') {
-      previousPeriodResults.forEach(item => {
-        const groupKey = getGroupKey(item.Date, granularity);
-        
-        if (!previousGroupedData[groupKey]) {
-          previousGroupedData[groupKey] = {
-            period: groupKey,
-            inlineSuggestions: 0,
-            inlineAcceptances: 0,
-            acceptanceRate: 0
-          };
-        }
-        
-        const inlineAcceptanceCount = parseInt(item.Inline_AcceptanceCount || 0);
-        const inlineSuggestionsCount = parseInt(item.Inline_SuggestionsCount || 0);
-        
-        previousGroupedData[groupKey].inlineSuggestions += inlineSuggestionsCount;
-        previousGroupedData[groupKey].inlineAcceptances += inlineAcceptanceCount;
-      });
-      
-      // Calculate acceptance rates for previous period
-      Object.values(previousGroupedData).forEach(group => {
-        if (group.inlineSuggestions > 0) {
-          group.acceptanceRate = (group.inlineAcceptances / group.inlineSuggestions) * 100;
-        }
-      });
-    }
-    
-    // Convert to arrays and sort by period
-    const currentPeriodData = Object.values(groupedData).sort((a, b) => {
-      return moment(a.period, 'YYYY-MM-DD').diff(moment(b.period, 'YYYY-MM-DD'));
-    });
-    
-    const previousPeriodData = Object.values(previousGroupedData).sort((a, b) => {
-      return moment(a.period, 'YYYY-MM-DD').diff(moment(b.period, 'YYYY-MM-DD'));
-    });
-    
-    // Format response
-    const response = {
-      granularity,
-      currentPeriod: currentPeriodData,
-      hasPreviousPeriod: compareWithPrevious === 'true',
-      previousPeriod: compareWithPrevious === 'true' ? previousPeriodData : []
-    };
-    
-    res.json(response);
+    res.json(summary);
   } catch (error) {
-    console.error('Error fetching acceptance rate trends:', error);
-    res.status(500).json({ error: 'Failed to fetch acceptance rate trends' });
+    console.error('Error fetching activity summary:', error);
+    res.status(500).json({ error: 'Failed to fetch activity summary' });
   }
 });
 

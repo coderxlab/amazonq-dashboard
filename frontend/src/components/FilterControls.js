@@ -8,6 +8,7 @@ const FilterControls = ({ onFilterChange }) => {
   const [selectedUser, setSelectedUser] = useState('');
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
+  const [granularity, setGranularity] = useState('daily');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -30,7 +31,8 @@ const FilterControls = ({ onFilterChange }) => {
     onFilterChange({
       userId: selectedUser,
       startDate: startDate ? startDate.toISOString().split('T')[0] : null,
-      endDate: endDate ? endDate.toISOString().split('T')[0] : null
+      endDate: endDate ? endDate.toISOString().split('T')[0] : null,
+      granularity: granularity
     });
   };
 
@@ -38,17 +40,19 @@ const FilterControls = ({ onFilterChange }) => {
     setSelectedUser('');
     setStartDate(null);
     setEndDate(null);
+    setGranularity('daily');
     onFilterChange({
       userId: '',
       startDate: null,
-      endDate: null
+      endDate: null,
+      granularity: 'daily'
     });
   };
 
   return (
     <div className="bg-white p-4 rounded-lg shadow mb-6">
       <h2 className="text-lg font-semibold mb-4">Filters</h2>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">User</label>
           <select
@@ -91,6 +95,18 @@ const FilterControls = ({ onFilterChange }) => {
             placeholderText="Select end date"
             dateFormat="yyyy-MM-dd"
           />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Time Granularity</label>
+          <select
+            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amazon-teal"
+            value={granularity}
+            onChange={(e) => setGranularity(e.target.value)}
+          >
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
         </div>
         <div className="flex items-end space-x-2">
           <button
