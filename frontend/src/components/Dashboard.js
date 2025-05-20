@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Bar, Line, Scatter } from 'react-chartjs-2';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Bar, Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -10,8 +10,7 @@ import {
   Title,
   Tooltip,
   Legend,
-  Filler,
-  RadialLinearScale,
+  Colors,
 } from 'chart.js';
 import FilterControls from './FilterControls';
 import SummaryCard from './SummaryCard';
@@ -27,8 +26,7 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  Filler,
-  RadialLinearScale
+  Colors
 );
 
 const Dashboard = () => {
@@ -36,7 +34,7 @@ const Dashboard = () => {
   const [filters, setFilters] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [activeVisualization, setActiveVisualization] = useState('comparison'); // 'comparison', 'heatmap', 'trend'
+  const [activeVisualization, setActiveVisualization] = useState('comparison'); // Default visualization
 
   useEffect(() => {
     const fetchData = async () => {
@@ -56,129 +54,130 @@ const Dashboard = () => {
     fetchData();
   }, [filters]);
 
-  // Prepare chart data for Suggestions vs. Acceptances over time
-  const prepareSuggestionAcceptanceChartData = () => {
-    if (!summaryData || !summaryData.byDate || summaryData.byDate.length === 0) return null;
+  // Prepare chart data for Suggestions vs Acceptances over time
+  const prepareSuggestionsVsAcceptancesData = useMemo(() => {
+    if (!summaryData || !summaryData.suggestionsVsAcceptances || summaryData.suggestionsVsAcceptances.length === 0) return null;
     
     return {
-      labels: summaryData.byDate.map(item => item.date),
+      labels: summaryData.suggestionsVsAcceptances.map(item => item.date),
       datasets: [
         {
           label: 'Suggestions',
-          data: summaryData.byDate.map(item => item.inlineSuggestions),
-          borderColor: 'rgba(75, 192, 192, 1)',
-          backgroundColor: 'rgba(75, 192, 192, 0.2)',
+          data: summaryData.suggestionsVsAcceptances.map(item => item.suggestions),
+          borderColor: 'rgba(54, 162, 235, 1)',
+          backgroundColor: 'rgba(54, 162, 235, 0.2)',
           tension: 0.4,
           fill: true,
         },
         {
           label: 'Acceptances',
-          data: summaryData.byDate.map(item => item.inlineAcceptances),
-          borderColor: 'rgba(153, 102, 255, 1)',
-          backgroundColor: 'rgba(153, 102, 255, 0.2)',
+          data: summaryData.suggestionsVsAcceptances.map(item => item.acceptances),
+          borderColor: 'rgba(75, 192, 192, 1)',
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
           tension: 0.4,
           fill: true,
         },
       ],
     };
-  };
+  }, [summaryData]);
 
-  // Prepare heatmap data for acceptance rates by time of day
-  const prepareHeatmapData = () => {
-    if (!summaryData || !summaryData.byHourOfDay) return null;
+  // Prepare heatmap data for acceptance rates by hour of day
+  const prepareHeatmapData = useMemo(() => {
+    if (!summaryData || !summaryData.byHourOfDay || summaryData.byHourOfDay.length === 0) return null;
     
-    // Create dataset for hour of day heatmap
-    const hourLabels = Array.from({ length: 24 }, (_, i) => 
-      i === 0 ? '12 AM' : 
-      i < 12 ? `${i} AM` : 
-      i === 12 ? '12 PM' : 
-      `${i - 12} PM`
-    );
+    // Format hours for display (e.g., "9 AM", "2 PM")
+    const hourLabels = summaryData.byHourOfDay.map(item => {
+      const hour = item.hour;
+      if (hour === 0) return '12 AM';
+      if (hour === 12) return '12 PM';
+      return hour < 12 ? `${hour} AM` : `${hour - 12} PM`;
+    });
     
-    return {
+    // Create dataset for heatmap
+    const dataset = {
       labels: hourLabels,
       datasets: [
         {
           label: 'Acceptance Rate (%)',
-          data: summaryData.byHourOfDay.map(hour => ({
-            x: hour.hour,
-            y: hour.rate,
-            suggestions: hour.suggestions,
-            acceptances: hour.acceptances
-          })),
-          backgroundColor: context => {
-            const value = context.raw.y;
-            if (value === 0) return 'rgba(220, 220, 220, 0.8)'; // Gray for no data
-            if (value < 30) return 'rgba(255, 99, 132, 0.8)';   // Red for low acceptance
-            if (value < 60) return 'rgba(255, 205, 86, 0.8)';   // Yellow for medium acceptance
-            return 'rgba(75, 192, 192, 0.8)';                   // Green for high acceptance
-          },
-          borderColor: 'rgba(0, 0, 0, 0.1)',
+          data: summaryData.byHourOfDay.map(item => item.rate),
+          backgroundColor: summaryData.byHourOfDay.map(item => {
+            // Color gradient based on acceptance rate
+            const rate = item.rate;
+            if (rate >= 80) return 'rgba(0, 200, 0, 0.8)';
+            if (rate >= 60) return 'rgba(100, 200, 0, 0.7)';
+            if (rate >= 40) return 'rgba(200, 200, 0, 0.6)';
+            if (rate >= 20) return 'rgba(200, 100, 0, 0.5)';
+            return 'rgba(200, 0, 0, 0.4)';
+          }),
           borderWidth: 1,
-          radius: 15,
-          hoverRadius: 18,
+          borderColor: '#ccc',
         }
       ]
     };
-  };
+    
+    return dataset;
+  }, [summaryData]);
 
   // Prepare data for day of week heatmap
-  const prepareDayOfWeekData = () => {
-    if (!summaryData || !summaryData.byDayOfWeek) return null;
+  const prepareDayOfWeekData = useMemo(() => {
+    if (!summaryData || !summaryData.byDayOfWeek || summaryData.byDayOfWeek.length === 0) return null;
     
     return {
-      labels: summaryData.byDayOfWeek.map(day => day.day),
+      labels: summaryData.byDayOfWeek.map(item => item.dayName),
       datasets: [
         {
           label: 'Acceptance Rate (%)',
-          data: summaryData.byDayOfWeek.map(day => day.rate),
-          backgroundColor: summaryData.byDayOfWeek.map(day => {
-            const value = day.rate;
-            if (value === 0) return 'rgba(220, 220, 220, 0.8)'; // Gray for no data
-            if (value < 30) return 'rgba(255, 99, 132, 0.8)';   // Red for low acceptance
-            if (value < 60) return 'rgba(255, 205, 86, 0.8)';   // Yellow for medium acceptance
-            return 'rgba(75, 192, 192, 0.8)';                   // Green for high acceptance
+          data: summaryData.byDayOfWeek.map(item => item.rate),
+          backgroundColor: summaryData.byDayOfWeek.map(item => {
+            // Color gradient based on acceptance rate
+            const rate = item.rate;
+            if (rate >= 80) return 'rgba(0, 200, 0, 0.8)';
+            if (rate >= 60) return 'rgba(100, 200, 0, 0.7)';
+            if (rate >= 40) return 'rgba(200, 200, 0, 0.6)';
+            if (rate >= 20) return 'rgba(200, 100, 0, 0.5)';
+            return 'rgba(200, 0, 0, 0.4)';
           }),
-          borderColor: 'rgba(0, 0, 0, 0.1)',
           borderWidth: 1,
+          borderColor: '#ccc',
         }
       ]
     };
-  };
+  }, [summaryData]);
 
   // Prepare trend analysis data
-  const prepareTrendChartData = () => {
-    if (!summaryData || !summaryData.acceptanceTrend || summaryData.acceptanceTrend.length === 0) return null;
+  const prepareTrendAnalysisData = useMemo(() => {
+    if (!summaryData || !summaryData.trendAnalysis || !summaryData.trendAnalysis.daily || summaryData.trendAnalysis.daily.length === 0) return null;
     
     return {
-      labels: summaryData.acceptanceTrend.map(item => item.date),
+      labels: summaryData.trendAnalysis.daily.map(item => item.date),
       datasets: [
         {
           label: 'Daily Acceptance Rate (%)',
-          data: summaryData.acceptanceTrend.map(item => item.rate),
-          borderColor: 'rgba(153, 102, 255, 1)',
-          backgroundColor: 'rgba(153, 102, 255, 0.2)',
-          borderWidth: 1,
-          pointRadius: 3,
-          tension: 0.1,
-          fill: false,
-        },
-        {
-          label: '7-Day Moving Average (%)',
-          data: summaryData.acceptanceTrend.map(item => item.movingAvgRate),
-          borderColor: 'rgba(255, 99, 132, 1)',
-          backgroundColor: 'rgba(255, 99, 132, 0.2)',
-          borderWidth: 2,
-          pointRadius: 0,
+          data: summaryData.trendAnalysis.daily.map(item => item.acceptanceRate),
+          borderColor: 'rgba(75, 192, 192, 1)',
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
           tension: 0.4,
           fill: false,
         },
-      ],
+        {
+          label: 'Weekly Trend',
+          data: summaryData.trendAnalysis.weekly.map(item => ({
+            x: summaryData.trendAnalysis.daily.findIndex(d => d.date === item.date),
+            y: item.acceptanceRate
+          })),
+          borderColor: 'rgba(153, 102, 255, 1)',
+          backgroundColor: 'rgba(153, 102, 255, 1)',
+          pointRadius: 6,
+          pointHoverRadius: 8,
+          showLine: false,
+          type: 'scatter',
+        }
+      ]
     };
-  };
+  }, [summaryData]);
 
   // Prepare chart data for AI Code Lines per Developer
-  const prepareBarChartData = () => {
+  const prepareBarChartData = useMemo(() => {
     if (!summaryData || !summaryData.byUser || summaryData.byUser.length === 0) return null;
     
     return {
@@ -204,10 +203,10 @@ const Dashboard = () => {
         },
       ],
     };
-  };
+  }, [summaryData]);
 
   // Prepare chart data for AI Code Lines over Time
-  const prepareLineChartData = () => {
+  const prepareLineChartData = useMemo(() => {
     if (!summaryData || !summaryData.byDate || summaryData.byDate.length === 0) return null;
     
     return {
@@ -231,14 +230,7 @@ const Dashboard = () => {
         },
       ],
     };
-  };
-
-  const barChartData = prepareBarChartData();
-  const lineChartData = prepareLineChartData();
-  const suggestionAcceptanceData = prepareSuggestionAcceptanceChartData();
-  const heatmapData = prepareHeatmapData();
-  const dayOfWeekData = prepareDayOfWeekData();
-  const trendChartData = prepareTrendChartData();
+  }, [summaryData]);
 
   const chartOptions = {
     responsive: true,
@@ -247,30 +239,13 @@ const Dashboard = () => {
       legend: {
         position: 'top',
       },
-      tooltip: {
-        callbacks: {
-          label: function(context) {
-            const label = context.dataset.label || '';
-            const value = context.raw;
-            
-            // For heatmap data points with additional info
-            if (typeof value === 'object' && value.suggestions !== undefined) {
-              return [
-                `${label}: ${value.y.toFixed(1)}%`,
-                `Suggestions: ${value.suggestions}`,
-                `Acceptances: ${value.acceptances}`
-              ];
-            }
-            
-            return `${label}: ${value}`;
-          }
-        }
-      }
     },
   };
   
+  // Options specific for bar charts (heatmap)
   const heatmapOptions = {
-    ...chartOptions,
+    responsive: true,
+    maintainAspectRatio: false,
     scales: {
       y: {
         beginAtZero: true,
@@ -286,25 +261,39 @@ const Dashboard = () => {
           text: 'Hour of Day'
         }
       }
-    }
+    },
+    plugins: {
+      legend: {
+        position: 'top',
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context) {
+            return `Acceptance Rate: ${context.raw.toFixed(1)}%`;
+          }
+        }
+      }
+    },
   };
   
+  // Options for day of week chart
   const dayOfWeekOptions = {
-    ...chartOptions,
+    ...heatmapOptions,
     scales: {
-      y: {
-        beginAtZero: true,
-        max: 100,
+      ...heatmapOptions.scales,
+      x: {
         title: {
           display: true,
-          text: 'Acceptance Rate (%)'
+          text: 'Day of Week'
         }
       }
     }
   };
   
+  // Options for trend analysis
   const trendOptions = {
-    ...chartOptions,
+    responsive: true,
+    maintainAspectRatio: false,
     scales: {
       y: {
         beginAtZero: true,
@@ -314,7 +303,22 @@ const Dashboard = () => {
           text: 'Acceptance Rate (%)'
         }
       }
-    }
+    },
+    plugins: {
+      legend: {
+        position: 'top',
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context) {
+            if (context.dataset.type === 'scatter') {
+              return `Weekly Average: ${context.raw.y.toFixed(1)}%`;
+            }
+            return `Daily Rate: ${context.raw.toFixed(1)}%`;
+          }
+        }
+      }
+    },
   };
 
   return (
@@ -325,7 +329,7 @@ const Dashboard = () => {
       
       {loading && (
         <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amazon-teal"></div>
+          <div data-testid="loading-spinner" className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amazon-teal"></div>
         </div>
       )}
       
@@ -373,13 +377,89 @@ const Dashboard = () => {
             />
           </div>
           
-          {/* Charts */}
+          {/* Enhanced Acceptance Visualizations */}
+          <div className="bg-white p-4 rounded-lg shadow mb-8">
+            <h2 className="text-lg font-semibold mb-4">Acceptance Metrics</h2>
+            
+            {/* Visualization Type Selector */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              <button
+                className={`px-3 py-1 rounded-md ${activeVisualization === 'comparison' ? 'bg-amazon-teal text-white' : 'bg-gray-200'}`}
+                onClick={() => setActiveVisualization('comparison')}
+              >
+                Suggestions vs. Acceptances
+              </button>
+              <button
+                className={`px-3 py-1 rounded-md ${activeVisualization === 'heatmap' ? 'bg-amazon-teal text-white' : 'bg-gray-200'}`}
+                onClick={() => setActiveVisualization('heatmap')}
+              >
+                Time of Day Heatmap
+              </button>
+              <button
+                className={`px-3 py-1 rounded-md ${activeVisualization === 'dayOfWeek' ? 'bg-amazon-teal text-white' : 'bg-gray-200'}`}
+                onClick={() => setActiveVisualization('dayOfWeek')}
+              >
+                Day of Week
+              </button>
+              <button
+                className={`px-3 py-1 rounded-md ${activeVisualization === 'trend' ? 'bg-amazon-teal text-white' : 'bg-gray-200'}`}
+                onClick={() => setActiveVisualization('trend')}
+              >
+                Trend Analysis
+              </button>
+            </div>
+            
+            {/* Visualization Display */}
+            <div className="h-80">
+              {activeVisualization === 'comparison' && (
+                prepareSuggestionsVsAcceptancesData ? (
+                  <Line data={prepareSuggestionsVsAcceptancesData} options={chartOptions} />
+                ) : (
+                  <div className="flex justify-center items-center h-full text-gray-500">
+                    No data available for suggestions vs. acceptances
+                  </div>
+                )
+              )}
+              
+              {activeVisualization === 'heatmap' && (
+                prepareHeatmapData ? (
+                  <Bar data={prepareHeatmapData} options={heatmapOptions} />
+                ) : (
+                  <div className="flex justify-center items-center h-full text-gray-500">
+                    No data available for time of day heatmap
+                  </div>
+                )
+              )}
+              
+              {activeVisualization === 'dayOfWeek' && (
+                prepareDayOfWeekData ? (
+                  <Bar data={prepareDayOfWeekData} options={dayOfWeekOptions} />
+                ) : (
+                  <div className="flex justify-center items-center h-full text-gray-500">
+                    No data available for day of week analysis
+                  </div>
+                )
+              )}
+              
+              {activeVisualization === 'trend' && (
+                prepareTrendAnalysisData ? (
+                  <Line data={prepareTrendAnalysisData} options={trendOptions} />
+                ) : (
+                  <div className="flex justify-center items-center h-full text-gray-500">
+                    No data available for trend analysis
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+          
+          {/* Original Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <div className="bg-white p-4 rounded-lg shadow">
               <h2 className="text-lg font-semibold mb-4">AI Code Lines per Developer</h2>
               <div className="h-80">
-                {barChartData ? (
-                  <Bar data={barChartData} options={chartOptions} />
+                {prepareBarChartData ? (
+                  <Bar data={prepareBarChartData} options={chartOptions} />
                 ) : (
                   <div className="flex justify-center items-center h-full text-gray-500">
                     No data available
@@ -390,105 +470,14 @@ const Dashboard = () => {
             <div className="bg-white p-4 rounded-lg shadow">
               <h2 className="text-lg font-semibold mb-4">AI Code Lines over Time</h2>
               <div className="h-80">
-                {lineChartData ? (
-                  <Line data={lineChartData} options={chartOptions} />
+                {prepareLineChartData ? (
+                  <Line data={prepareLineChartData} options={chartOptions} />
                 ) : (
                   <div className="flex justify-center items-center h-full text-gray-500">
                     No data available
                   </div>
                 )}
               </div>
-            </div>
-          </div>
-          
-          {/* Enhanced Acceptance Visualizations */}
-          <div className="bg-white p-4 rounded-lg shadow mb-8">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold">Amazon Q Acceptance Visualizations</h2>
-              <div className="flex space-x-2">
-                <button
-                  className={`px-3 py-1 rounded-md text-sm ${
-                    activeVisualization === 'comparison'
-                      ? 'bg-amazon-teal text-white'
-                      : 'bg-gray-200 hover:bg-gray-300'
-                  }`}
-                  onClick={() => setActiveVisualization('comparison')}
-                >
-                  Suggestions vs. Acceptances
-                </button>
-                <button
-                  className={`px-3 py-1 rounded-md text-sm ${
-                    activeVisualization === 'heatmap'
-                      ? 'bg-amazon-teal text-white'
-                      : 'bg-gray-200 hover:bg-gray-300'
-                  }`}
-                  onClick={() => setActiveVisualization('heatmap')}
-                >
-                  Acceptance Heatmap
-                </button>
-                <button
-                  className={`px-3 py-1 rounded-md text-sm ${
-                    activeVisualization === 'trend'
-                      ? 'bg-amazon-teal text-white'
-                      : 'bg-gray-200 hover:bg-gray-300'
-                  }`}
-                  onClick={() => setActiveVisualization('trend')}
-                >
-                  Trend Analysis
-                </button>
-              </div>
-            </div>
-            
-            <div className="h-96">
-              {activeVisualization === 'comparison' && (
-                <>
-                  {suggestionAcceptanceData ? (
-                    <Line data={suggestionAcceptanceData} options={chartOptions} />
-                  ) : (
-                    <div className="flex justify-center items-center h-full text-gray-500">
-                      No suggestion/acceptance data available
-                    </div>
-                  )}
-                </>
-              )}
-              
-              {activeVisualization === 'heatmap' && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
-                  <div>
-                    <h3 className="text-md font-medium mb-2 text-center">Acceptance Rate by Hour of Day</h3>
-                    {heatmapData ? (
-                      <Scatter data={heatmapData} options={heatmapOptions} />
-                    ) : (
-                      <div className="flex justify-center items-center h-full text-gray-500">
-                        No heatmap data available
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="text-md font-medium mb-2 text-center">Acceptance Rate by Day of Week</h3>
-                    {dayOfWeekData ? (
-                      <Bar data={dayOfWeekData} options={dayOfWeekOptions} />
-                    ) : (
-                      <div className="flex justify-center items-center h-full text-gray-500">
-                        No day of week data available
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-              
-              {activeVisualization === 'trend' && (
-                <>
-                  <h3 className="text-md font-medium mb-2 text-center">Acceptance Rate Trend Analysis</h3>
-                  {trendChartData ? (
-                    <Line data={trendChartData} options={trendOptions} />
-                  ) : (
-                    <div className="flex justify-center items-center h-full text-gray-500">
-                      No trend data available
-                    </div>
-                  )}
-                </>
-              )}
             </div>
           </div>
           
