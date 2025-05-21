@@ -7,6 +7,7 @@ const moment = require('moment');
 jest.mock('aws-sdk', () => {
   const mockDocClient = {
     scan: jest.fn().mockReturnThis(),
+    query: jest.fn().mockReturnThis(),
     promise: jest.fn()
   };
   return {
@@ -24,14 +25,21 @@ jest.mock('aws-sdk', () => {
 const app = require('./server');
 const docClient = new AWS.DynamoDB.DocumentClient();
 
+// Reset all mocks before each test
+beforeEach(() => {
+  jest.clearAllMocks();
+  docClient.scan.mockReturnThis();
+  docClient.query.mockReturnThis();
+});
+
 describe('GET /api/activity/compare', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   it('should return comparative metrics for two periods', async () => {
-    // Mock data
-    const mockItems = [
+    // Mock data for current period
+    const mockCurrentItems = [
       {
         UserId: 'user1',
         Date: '2024-01-01',
@@ -40,7 +48,11 @@ describe('GET /api/activity/compare', () => {
         Chat_MessagesInteracted: '3',
         Inline_SuggestionsCount: '8',
         Inline_AcceptanceCount: '6'
-      },
+      }
+    ];
+
+    // Mock data for previous period
+    const mockPreviousItems = [
       {
         UserId: 'user1',
         Date: '2023-12-01',
@@ -52,7 +64,10 @@ describe('GET /api/activity/compare', () => {
       }
     ];
 
-    docClient.promise.mockResolvedValue({ Items: mockItems });
+    // Mock query responses for both periods
+    docClient.promise
+      .mockResolvedValueOnce({ Items: mockCurrentItems })   // First query (current period)
+      .mockResolvedValueOnce({ Items: mockPreviousItems }); // Second query (previous period)
 
     const response = await request(app)
       .get('/api/activity/compare')
@@ -60,7 +75,8 @@ describe('GET /api/activity/compare', () => {
         startDate: '2024-01-01',
         endDate: '2024-01-31',
         compareStartDate: '2023-12-01',
-        compareEndDate: '2023-12-31'
+        compareEndDate: '2023-12-31',
+        userIds: 'user1'
       });
 
     expect(response.status).toBe(200);
@@ -78,10 +94,27 @@ describe('GET /api/activity/compare', () => {
       inlineSuggestions: 5,
       inlineAcceptances: 3
     });
+
+    // Verify query was called with correct parameters
+    expect(docClient.query).toHaveBeenCalledWith(
+      expect.objectContaining({
+        TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
+        IndexName: 'UserDate-index',
+        KeyConditionExpression: 'UserId = :userId AND #date BETWEEN :startDate AND :endDate',
+        ExpressionAttributeNames: {
+          '#date': 'Date'
+        },
+        ExpressionAttributeValues: {
+          ':userId': 'user1',
+          ':startDate': '2024-01-01',
+          ':endDate': '2024-01-31'
+        }
+      })
+    );
   });
 
-  it('should filter by user IDs when provided', async () => {
-    // Mock data
+  it('should handle multiple user IDs', async () => {
+    // Mock data for multiple users
     const mockItems = [
       {
         UserId: 'user1',
@@ -97,6 +130,7 @@ describe('GET /api/activity/compare', () => {
       }
     ];
 
+    // Mock query responses for both users
     docClient.promise.mockResolvedValue({ Items: mockItems });
 
     const response = await request(app)
@@ -106,14 +140,62 @@ describe('GET /api/activity/compare', () => {
         endDate: '2024-01-31',
         compareStartDate: '2023-12-01',
         compareEndDate: '2023-12-31',
+        userIds: 'user1,user2'
+      });
+
+    expect(response.status).toBe(200);
+    expect(docClient.query).toHaveBeenCalledTimes(4); // 2 users × 2 periods
+    expect(docClient.query).toHaveBeenCalledWith(
+      expect.objectContaining({
+        IndexName: 'UserDate-index',
+        KeyConditionExpression: 'UserId = :userId AND #date BETWEEN :startDate AND :endDate'
+      })
+    );
+  });
+
+  it('should use default date ranges when not provided', async () => {
+    // Mock current date
+    const now = moment('2024-01-15');
+    jest.spyOn(moment, 'now').mockReturnValue(now);
+
+    // Mock data
+    const mockItems = [
+      {
+        UserId: 'user1',
+        Date: '2024-01-14',
+        Chat_AICodeLines: '10',
+        Chat_MessagesInteracted: '3'
+      }
+    ];
+
+    docClient.promise.mockResolvedValue({ Items: mockItems });
+
+    const response = await request(app)
+      .get('/api/activity/compare')
+      .query({
         userIds: 'user1'
       });
 
     expect(response.status).toBe(200);
-    expect(docClient.scan).toHaveBeenCalledWith(
+    expect(docClient.query).toHaveBeenCalledTimes(2); // One for each period
+
+    // Verify current period query (last week)
+    expect(docClient.query).toHaveBeenCalledWith(
       expect.objectContaining({
-        FilterExpression: 'UserId = :userId',
-        ExpressionAttributeValues: { ':userId': 'user1' }
+        ExpressionAttributeValues: expect.objectContaining({
+          ':startDate': '2024-01-08', // 1 week ago
+          ':endDate': '2024-01-15'    // current date
+        })
+      })
+    );
+
+    // Verify previous period query (week before last)
+    expect(docClient.query).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ExpressionAttributeValues: expect.objectContaining({
+          ':startDate': '2023-12-31', // Previous week start
+          ':endDate': '2024-01-07'    // Previous week end
+        })
       })
     );
   });
@@ -127,10 +209,108 @@ describe('GET /api/activity/compare', () => {
         startDate: '2024-01-01',
         endDate: '2024-01-31',
         compareStartDate: '2023-12-01',
-        compareEndDate: '2023-12-31'
+        compareEndDate: '2023-12-31',
+        userIds: 'user1'
       });
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({ error: 'Failed to fetch comparative metrics' });
+  });
+
+  it('should fetch metrics for all users when no userIds provided', async () => {
+    // Mock scan response for getting all users
+    const mockUsers = [
+      { UserId: 'user1' },
+      { UserId: 'user2' }
+    ];
+
+    // Mock activity data for users
+    const mockUser1Data = [
+      {
+        UserId: 'user1',
+        Date: '2024-01-01',
+        Chat_AICodeLines: '10',
+        Inline_AICodeLines: '5',
+        Chat_MessagesInteracted: '3',
+        Inline_SuggestionsCount: '8',
+        Inline_AcceptanceCount: '6'
+      }
+    ];
+
+    const mockUser2Data = [
+      {
+        UserId: 'user2',
+        Date: '2024-01-01',
+        Chat_AICodeLines: '15',
+        Inline_AICodeLines: '7',
+        Chat_MessagesInteracted: '4',
+        Inline_SuggestionsCount: '10',
+        Inline_AcceptanceCount: '8'
+      }
+    ];
+
+    // Mock scan and query responses
+    docClient.scan.mockReturnThis();
+    docClient.query.mockReturnThis();
+
+    // Track mock calls
+    let scanCallCount = 0;
+    let queryCallCount = 0;
+
+    docClient.promise.mockImplementation(() => {
+      if (docClient.scan.mock.calls.length > scanCallCount) {
+        scanCallCount++;
+        console.log('Scan call', scanCallCount);
+        return Promise.resolve({ Items: mockUsers });
+      }
+
+      queryCallCount++;
+      console.log('Query call', queryCallCount);
+
+      // First two queries are for current period
+      if (queryCallCount <= 2) {
+        return Promise.resolve({
+          Items: queryCallCount === 1 ? mockUser1Data : mockUser2Data
+        });
+      }
+      // Next two queries are for previous period
+      else {
+        return Promise.resolve({
+          Items: queryCallCount === 3 ? mockUser1Data : mockUser2Data
+        });
+      }
+    });
+
+    const response = await request(app)
+      .get('/api/activity/compare')
+      .query({
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+        compareStartDate: '2023-12-01',
+        compareEndDate: '2023-12-31'
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('current');
+    expect(response.body).toHaveProperty('previous');
+    
+    // Verify metrics are aggregated for all users
+    expect(response.body.current).toEqual({
+      aiCodeLines: 37, // (10+5) + (15+7)
+      chatInteractions: 7, // 3 + 4
+      inlineSuggestions: 18, // 8 + 10
+      inlineAcceptances: 14 // 6 + 8
+    });
+
+    // Verify scan was called to get users
+    expect(docClient.scan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
+        ProjectionExpression: 'UserId'
+      })
+    );
+
+    // Verify query was called for each user
+    expect(docClient.query).toHaveBeenCalledTimes(4); // 2 users × 2 periods
   });
 });
