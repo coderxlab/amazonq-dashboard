@@ -88,7 +88,12 @@ router.get('/type-distribution', async (req, res) => {
     const { userId, startDate, endDate } = req.query;
     const docClient = req.app.locals.docClient;
     
-    let params = {
+const { userId, startDate, endDate } = req.query;
+    const docClient = req.app.locals.docClient;
+    
+    const params = buildQueryParams(process.env.DYNAMODB_PROMPT_LOG_TABLE, userId);
+    
+    const scanResults = await docClient.scan(params).promise();
       TableName: process.env.DYNAMODB_PROMPT_LOG_TABLE
     };
     
