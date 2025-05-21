@@ -2,10 +2,13 @@ import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import Dashboard from './Dashboard';
-import { getActivitySummary } from '../services/api';
+import { getActivitySummary, getComparativeMetrics } from '../services/api';
 
 // Mock the API service
-jest.mock('../services/api');
+jest.mock('../services/api', () => ({
+  getActivitySummary: jest.fn(),
+  getComparativeMetrics: jest.fn(),
+}));
 
 // Mock chart.js to avoid canvas rendering issues in tests
 jest.mock('react-chartjs-2', () => ({
@@ -85,9 +88,25 @@ const mockSummaryData = {
   ]
 };
 
+const mockComparisonData = {
+  current: {
+    aiCodeLines: 1500,
+    chatInteractions: 250,
+    inlineSuggestions: 800,
+    inlineAcceptances: 600
+  },
+  previous: {
+    aiCodeLines: 1200,
+    chatInteractions: 200,
+    inlineSuggestions: 700,
+    inlineAcceptances: 500
+  }
+};
+
 describe('Dashboard Component', () => {
   beforeEach(() => {
     getActivitySummary.mockResolvedValue(mockSummaryData);
+    getComparativeMetrics.mockResolvedValue(mockComparisonData);
   });
 
   afterEach(() => {
@@ -95,13 +114,13 @@ describe('Dashboard Component', () => {
   });
 
   test('renders loading state initially', () => {
-    render(<Dashboard />);
+    render(<Dashboard users={['user123456789', 'user987654321']} loadingUsers={false} />);
     expect(screen.getByRole('heading', { name: /developer productivity dashboard/i })).toBeInTheDocument();
     expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
   });
 
   test('renders summary cards with correct data', async () => {
-    render(<Dashboard />);
+    render(<Dashboard users={['user123456789', 'user987654321']} loadingUsers={false} />);
     
     await waitFor(() => {
       expect(screen.getByText('1500')).toBeInTheDocument(); // Total AI Code Lines
@@ -112,7 +131,7 @@ describe('Dashboard Component', () => {
   });
 
   test('renders enhanced acceptance visualizations section', async () => {
-    render(<Dashboard />);
+    render(<Dashboard users={['user123456789', 'user987654321']} loadingUsers={false} />);
     
     await waitFor(() => {
       expect(screen.getByText('Acceptance Metrics')).toBeInTheDocument();
@@ -124,7 +143,7 @@ describe('Dashboard Component', () => {
   });
 
   test('toggles between different visualization types', async () => {
-    render(<Dashboard />);
+    render(<Dashboard users={['user123456789', 'user987654321']} loadingUsers={false} />);
     
     // Wait for data to load
     await waitFor(() => {
@@ -136,11 +155,11 @@ describe('Dashboard Component', () => {
     
     // Click on heatmap button
     fireEvent.click(screen.getByRole('button', { name: /time of day heatmap/i }));
-    expect(screen.getByTestId('bar-chart')).toBeInTheDocument();
+    expect(screen.getAllByTestId('bar-chart')[0]).toBeInTheDocument();
     
     // Click on day of week button
     fireEvent.click(screen.getByRole('button', { name: /day of week/i }));
-    expect(screen.getByTestId('bar-chart')).toBeInTheDocument();
+    expect(screen.getAllByTestId('bar-chart')[0]).toBeInTheDocument();
     
     // Click on trend analysis button
     fireEvent.click(screen.getByRole('button', { name: /trend analysis/i }));
@@ -152,18 +171,19 @@ describe('Dashboard Component', () => {
   });
 
   test('renders developer activity table with correct data', async () => {
-    render(<Dashboard />);
+    render(<Dashboard users={['user123456789', 'user987654321']} loadingUsers={false} />);
     
     await waitFor(() => {
       expect(screen.getByText('Developer Activity Summary')).toBeInTheDocument();
       
-      // Check for user IDs (shortened)
-      expect(screen.getByText('23456789')).toBeInTheDocument();
-      expect(screen.getByText('87654321')).toBeInTheDocument();
+      // Check for user IDs (shortened) in the table cells
+      const tableCells = screen.getAllByRole('cell');
+      expect(tableCells.find(cell => cell.textContent === '23456789')).toBeInTheDocument();
+      expect(tableCells.find(cell => cell.textContent === '87654321')).toBeInTheDocument();
       
       // Check for acceptance rates
-      expect(screen.getByText('80.0%')).toBeInTheDocument(); // 240/300 * 100
-      expect(screen.getByText('72.0%')).toBeInTheDocument(); // 360/500 * 100
+      expect(tableCells.find(cell => cell.textContent === '80.0%')).toBeInTheDocument();
+      expect(tableCells.find(cell => cell.textContent === '72.0%')).toBeInTheDocument();
     });
   });
 });
