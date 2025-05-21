@@ -175,20 +175,24 @@ const Dashboard = ({users, loadingUsers}) => {
           pointHoverRadius: 8,
           showLine: false,
           type: 'scatter',
+        },
+        {
+          label: 'Monthly Trend',
+          data: summaryData.trendAnalysis.daily.map((dailyItem, index) => {
+            // Find if there's a monthly data point for this date
+            const monthlyData = summaryData.trendAnalysis.monthly.find(m => m.date === dailyItem.date);
+            
+            // Return monthly data if it exists for this date, otherwise null
+            return monthlyData ? monthlyData.acceptanceRate : null;
+          }),         
+          borderColor: 'rgba(255, 99, 132, 1)',
+          backgroundColor: 'rgba(255, 99, 132, 1)',
+          pointRadius: 8,
+          pointHoverRadius: 10,
+          showLine: false,
+          type: 'scatter',
         }
-      ],
-      plugins: {
-        tooltip: {
-          callbacks: {
-            label: function(context) {
-              let value = context.raw; // or context.parsed.y depending on your Chart.js version
-              return value !== null && value !== undefined 
-                ? value.toFixed(2) + '%' 
-                : 'No data';
-            }
-          }
-        }
-      }
+      ]
     };
   }, [summaryData]);
 
@@ -315,10 +319,20 @@ const Dashboard = ({users, loadingUsers}) => {
       tooltip: {
         callbacks: {
           label: function(context) {
-            if (context.dataset.type === 'scatter') {
-              return `Weekly Average: ${context.raw.y.toFixed(1)}%`;
+            let value = context.raw;
+            console.log("context -- ", context)
+            if (context.dataset.label === 'Weekly Trend') {
+              return value !== null && value !== undefined 
+                ? `Weekly Average: ${value.toFixed(2)}%` 
+                : 'No weekly data';
+            } else if (context.dataset.label === 'Monthly Trend') {
+              return value !== null && value !== undefined 
+                ? `Monthly Average: ${value.toFixed(2)}%` 
+                : 'No monthly data';
             }
-            return `Daily Rate: ${context.raw.toFixed(1)}%`;
+            return value !== null && value !== undefined 
+              ? `Daily Rate: ${value.toFixed(2)}%` 
+              : 'No data';
           }
         }
       }

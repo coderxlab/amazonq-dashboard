@@ -57,7 +57,6 @@ export const getActivitySummary = async (filters = {}) => {
 
 export const getComparativeMetrics = async (filters = {}) => {
   try {
-    console.log("here in getComparativeMetrics")
     const { userIds, startDate, endDate, compareStartDate, compareEndDate } = filters;
     const params = {};
     
