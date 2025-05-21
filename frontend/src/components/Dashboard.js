@@ -13,6 +13,9 @@ import {
 } from 'chart.js';
 import FilterControls from './FilterControls';
 import SummaryCard from './SummaryCard';
+import ProductivityTrends from './ProductivityTrends';
+import AdoptionComparison from './AdoptionComparison';
+import CorrelationAnalysis from './CorrelationAnalysis';
 import { getActivitySummary } from '../services/api';
 
 // Register ChartJS components
@@ -32,6 +35,7 @@ const Dashboard = () => {
   const [filters, setFilters] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState('summary');
 
   useEffect(() => {
     const fetchData = async () => {

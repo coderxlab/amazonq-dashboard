@@ -1,548 +1,353 @@
-// Trend analysis endpoints for Amazon Q Developer Productivity Dashboard
 const express = require('express');
-const moment = require('moment');
 const router = express.Router();
+const AWS = require('aws-sdk');
+const moment = require('moment');
+const logger = require('./logger'); // We'll create this logger module later
 
-// Get trend analysis data
-router.get('/api/trends', async (req, res) => {
+// Authorization middleware
+const authorize = (req, res, next) => {
+  // Check for authorization header
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader) {
+    return res.status(401).json({ 
+      error: 'Authorization required',
+      code: 'UNAUTHORIZED'
+    });
+  }
+  
+  // In a real application, you would validate the token/credentials here
+  // For now, we'll just check if the header exists
+  // TODO: Implement proper token validation
+  
+  next();
+};
+
+// Configure AWS
+const docClient = new AWS.DynamoDB.DocumentClient();
+
+/**
+ * Get productivity trends over time
+ * Analyzes productivity metrics over specified time periods
+ */
+router.get('/productivity', authorize, async (req, res) => {
   try {
-    const { userId, startDate, endDate, period = 'day', windowSize = 3 } = req.query;
+    const { userId, startDate, endDate, interval = 'day' } = req.query;
     
-    // Get the document client from the parent module
-    const docClient = req.app.get('docClient');
-    
-    let params = {
-      TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE
-    };
-    
-    // Add filters if provided
-    if (userId) {
-      params.FilterExpression = 'UserId = :userId';
-      params.ExpressionAttributeValues = {
-        ':userId': userId
-      };
-    }
-    
-    const scanResults = await docClient.scan(params).promise();
-    
-    // Filter by date range if provided
-    let results = scanResults.Items;
-    if (startDate && endDate) {
-      const startMoment = moment(startDate).startOf('day');
-      const endMoment = moment(endDate).endOf('day');
-      
-      results = results.filter(item => {
-        const itemDate = parseDate(item.Date);
-        if (!itemDate) return false;
-        
-        return itemDate.isBetween(startMoment, endMoment, null, '[]');
+    // Validate date parameters
+    if (!startDate || !endDate) {
+      return res.status(400).json({ 
+        error: 'Start date and end date are required',
+        code: 'INVALID_PARAMETERS'
       });
     }
     
-    // Group data by time period
-    const groupedData = groupByTimePeriod(results, period);
+    // Validate interval parameter
+    const validIntervals = ['day', 'week', 'month'];
+    if (!validIntervals.includes(interval)) {
+      return res.status(400).json({ 
+        error: 'Invalid interval. Must be one of: day, week, month',
+        code: 'INVALID_PARAMETERS'
+      });
+    }
     
-    // Calculate moving averages
-    const dataWithMA = calculateMovingAverages(groupedData, parseInt(windowSize));
+    // Set up query parameters
+    const params = {
+      TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
+      IndexName: 'DateIndex', // Assuming there's a GSI on the Date field
+      KeyConditionExpression: '#date BETWEEN :startDate AND :endDate',
+      ExpressionAttributeNames: {
+        '#date': 'Date'
+      },
+      ExpressionAttributeValues: {
+        ':startDate': startDate,
+        ':endDate': endDate
+      }
+    };
     
-    // Calculate growth rates
-    const dataWithGrowth = calculateGrowthRates(dataWithMA);
+    // Add user filter if provided
+    if (userId) {
+      params.FilterExpression = 'UserId = :userId';
+      params.ExpressionAttributeValues[':userId'] = userId;
+    }
     
-    // Calculate productivity metrics
-    const trendData = calculateProductivityMetrics(dataWithGrowth);
+    // Use query instead of scan for better performance
+    let activityData;
+    try {
+      activityData = await docClient.query(params).promise();
+    } catch (error) {
+      // If DateIndex doesn't exist, fall back to scan with filter
+      if (error.code === 'ValidationException' && error.message.includes('IndexName')) {
+        delete params.IndexName;
+        delete params.KeyConditionExpression;
+        
+        params.FilterExpression = params.FilterExpression 
+          ? `#date BETWEEN :startDate AND :endDate AND ${params.FilterExpression}`
+          : '#date BETWEEN :startDate AND :endDate';
+          
+        activityData = await docClient.scan(params).promise();
+        
+        // Log warning about inefficient operation
+        logger.warn('Using scan operation instead of query. Consider creating a GSI on Date field for better performance.');
+      } else {
+        throw error;
+      }
+    }
+    
+    // Group data by time interval
+    const groupedData = groupDataByTimeInterval(activityData.Items, interval);
+    
+    // Calculate trends
+    const trends = calculateProductivityTrends(groupedData);
+    
+    res.json(trends);
+  } catch (error) {
+    logger.error('Error fetching productivity trends:', { error: error.message, stack: error.stack });
+    res.status(500).json({ 
+      error: 'An error occurred while fetching productivity trends',
+      code: 'INTERNAL_SERVER_ERROR'
+    });
+  }
+});
+
+/**
+ * Get before/after adoption comparison
+ * Compares metrics before and after Amazon Q adoption
+ */
+router.get('/adoption', authorize, async (req, res) => {
+  try {
+    const { userId, daysBeforeAfter = 30 } = req.query;
+    
+    // Validate parameters
+    if (!userId) {
+      return res.status(400).json({ 
+        error: 'User ID is required',
+        code: 'INVALID_PARAMETERS'
+      });
+    }
+    
+    // First, determine the adoption date (first usage of Amazon Q)
+    const adoptionParams = {
+      TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
+      FilterExpression: 'UserId = :userId',
+      ExpressionAttributeValues: {
+        ':userId': userId
+      },
+      ProjectionExpression: 'Date'
+    };
+    
+    const adoptionResult = await docClient.scan(adoptionParams).promise();
+    
+    if (!adoptionResult.Items || adoptionResult.Items.length === 0) {
+      return res.status(404).json({ 
+        error: 'No activity data found for this user',
+        code: 'NOT_FOUND'
+      });
+    }
+    
+    // Find the earliest date
+    const adoptionDate = adoptionResult.Items
+      .map(item => moment(item.Date))
+      .sort((a, b) => a - b)[0]
+      .format('YYYY-MM-DD');
+    
+    // Calculate before and after date ranges
+    const beforeStartDate = moment(adoptionDate).subtract(daysBeforeAfter, 'days').format('YYYY-MM-DD');
+    const afterEndDate = moment(adoptionDate).add(daysBeforeAfter, 'days').format('YYYY-MM-DD');
+    
+    // Get data before adoption
+    const beforeParams = {
+      TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
+      FilterExpression: 'UserId = :userId AND #date BETWEEN :startDate AND :endDate',
+      ExpressionAttributeNames: {
+        '#date': 'Date'
+      },
+      ExpressionAttributeValues: {
+        ':userId': userId,
+        ':startDate': beforeStartDate,
+        ':endDate': moment(adoptionDate).subtract(1, 'day').format('YYYY-MM-DD')
+      }
+    };
+    
+    // Get data after adoption
+    const afterParams = {
+      TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
+      FilterExpression: 'UserId = :userId AND #date BETWEEN :startDate AND :endDate',
+      ExpressionAttributeNames: {
+        '#date': 'Date'
+      },
+      ExpressionAttributeValues: {
+        ':userId': userId,
+        ':startDate': adoptionDate,
+        ':endDate': afterEndDate
+      }
+    };
+    
+    // Execute both queries in parallel for better performance
+    const [beforeData, afterData] = await Promise.all([
+      docClient.scan(beforeParams).promise(),
+      docClient.scan(afterParams).promise()
+    ]);
+    
+    // Calculate metrics for before and after periods
+    const beforeMetrics = calculateAggregateMetrics(beforeData.Items);
+    const afterMetrics = calculateAggregateMetrics(afterData.Items);
+    
+    // Calculate percentage changes
+    const comparison = calculatePercentageChanges(beforeMetrics, afterMetrics);
     
     res.json({
-      period,
-      windowSize: parseInt(windowSize),
-      data: trendData
+      adoptionDate,
+      beforePeriod: {
+        startDate: beforeStartDate,
+        endDate: moment(adoptionDate).subtract(1, 'day').format('YYYY-MM-DD'),
+        metrics: beforeMetrics
+      },
+      afterPeriod: {
+        startDate: adoptionDate,
+        endDate: afterEndDate,
+        metrics: afterMetrics
+      },
+      percentageChanges: comparison
     });
   } catch (error) {
-    console.error('Error fetching trend data:', error);
-    res.status(500).json({ error: 'Failed to fetch trend data' });
+    logger.error('Error fetching adoption comparison:', { error: error.message, stack: error.stack });
+    res.status(500).json({ 
+      error: 'An error occurred while fetching adoption comparison',
+      code: 'INTERNAL_SERVER_ERROR'
+    });
   }
 });
 
-// Get before/after adoption comparison
-router.get('/api/adoption-impact', async (req, res) => {
+/**
+ * Get correlation analysis between Amazon Q usage and productivity metrics
+ */
+router.get('/correlation', authorize, async (req, res) => {
   try {
-    const { userId, windowDays = 30 } = req.query;
+    const { startDate, endDate, metric = 'aiCodeLines' } = req.query;
     
-    // Get the document client from the parent module
-    const docClient = req.app.get('docClient');
-    
-    let params = {
-      TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE
-    };
-    
-    // Add filters if provided
-    if (userId) {
-      params.FilterExpression = 'UserId = :userId';
-      params.ExpressionAttributeValues = {
-        ':userId': userId
-      };
-    }
-    
-    const scanResults = await docClient.scan(params).promise();
-    const results = scanResults.Items;
-    
-    // Group data by user
-    const userAdoptionData = {};
-    
-    results.forEach(item => {
-      const userId = item.UserId;
-      const itemDate = parseDate(item.Date);
-      if (!itemDate) return;
-      
-      if (!userAdoptionData[userId]) {
-        userAdoptionData[userId] = {
-          userId,
-          firstUsageDate: itemDate,
-          lastUsageDate: itemDate,
-          activities: []
-        };
-      }
-      
-      // Update first and last usage dates
-      if (itemDate.isBefore(userAdoptionData[userId].firstUsageDate)) {
-        userAdoptionData[userId].firstUsageDate = itemDate;
-      }
-      if (itemDate.isAfter(userAdoptionData[userId].lastUsageDate)) {
-        userAdoptionData[userId].lastUsageDate = itemDate;
-      }
-      
-      // Add activity data
-      userAdoptionData[userId].activities.push({
-        date: itemDate,
-        chatAICodeLines: parseInt(item.Chat_AICodeLines || 0),
-        chatMessagesInteracted: parseInt(item.Chat_MessagesInteracted || 0),
-        inlineAICodeLines: parseInt(item.Inline_AICodeLines || 0),
-        inlineAcceptanceCount: parseInt(item.Inline_AcceptanceCount || 0),
-        inlineSuggestionsCount: parseInt(item.Inline_SuggestionsCount || 0)
-      });
-    });
-    
-    // Calculate before/after metrics for each user
-    const adoptionImpact = Object.values(userAdoptionData).map(userData => {
-      // Sort activities by date
-      userData.activities.sort((a, b) => a.date.diff(b.date));
-      
-      const adoptionDate = userData.firstUsageDate;
-      const windowDuration = parseInt(windowDays);
-      
-      // Get activities before adoption (if any)
-      const beforeActivities = userData.activities.filter(activity => 
-        activity.date.isBefore(adoptionDate.clone().add(windowDuration, 'days'))
-      );
-      
-      // Get activities after adoption
-      const afterActivities = userData.activities.filter(activity => 
-        activity.date.isAfter(adoptionDate.clone().add(windowDuration, 'days'))
-      );
-      
-      // Calculate metrics for before period
-      const beforeMetrics = {
-        period: 'before',
-        totalDays: beforeActivities.length,
-        aiCodeLines: beforeActivities.reduce((sum, act) => sum + act.chatAICodeLines + act.inlineAICodeLines, 0),
-        chatInteractions: beforeActivities.reduce((sum, act) => sum + act.chatMessagesInteracted, 0),
-        inlineSuggestions: beforeActivities.reduce((sum, act) => sum + act.inlineSuggestionsCount, 0),
-        inlineAcceptances: beforeActivities.reduce((sum, act) => sum + act.inlineAcceptanceCount, 0)
-      };
-      
-      // Calculate metrics for after period
-      const afterMetrics = {
-        period: 'after',
-        totalDays: afterActivities.length,
-        aiCodeLines: afterActivities.reduce((sum, act) => sum + act.chatAICodeLines + act.inlineAICodeLines, 0),
-        chatInteractions: afterActivities.reduce((sum, act) => sum + act.chatMessagesInteracted, 0),
-        inlineSuggestions: afterActivities.reduce((sum, act) => sum + act.inlineSuggestionsCount, 0),
-        inlineAcceptances: afterActivities.reduce((sum, act) => sum + act.inlineAcceptanceCount, 0)
-      };
-      
-      // Calculate daily averages
-      if (beforeMetrics.totalDays > 0) {
-        beforeMetrics.aiCodeLinesPerDay = beforeMetrics.aiCodeLines / beforeMetrics.totalDays;
-        beforeMetrics.chatInteractionsPerDay = beforeMetrics.chatInteractions / beforeMetrics.totalDays;
-        beforeMetrics.inlineSuggestionsPerDay = beforeMetrics.inlineSuggestions / beforeMetrics.totalDays;
-        beforeMetrics.inlineAcceptancesPerDay = beforeMetrics.inlineAcceptances / beforeMetrics.totalDays;
-      }
-      
-      if (afterMetrics.totalDays > 0) {
-        afterMetrics.aiCodeLinesPerDay = afterMetrics.aiCodeLines / afterMetrics.totalDays;
-        afterMetrics.chatInteractionsPerDay = afterMetrics.chatInteractions / afterMetrics.totalDays;
-        afterMetrics.inlineSuggestionsPerDay = afterMetrics.inlineSuggestions / afterMetrics.totalDays;
-        afterMetrics.inlineAcceptancesPerDay = afterMetrics.inlineAcceptances / afterMetrics.totalDays;
-      }
-      
-      // Calculate percentage changes
-      const changes = {
-        aiCodeLinesChange: beforeMetrics.aiCodeLinesPerDay > 0 
-          ? ((afterMetrics.aiCodeLinesPerDay - beforeMetrics.aiCodeLinesPerDay) / beforeMetrics.aiCodeLinesPerDay) * 100 
-          : null,
-        chatInteractionsChange: beforeMetrics.chatInteractionsPerDay > 0 
-          ? ((afterMetrics.chatInteractionsPerDay - beforeMetrics.chatInteractionsPerDay) / beforeMetrics.chatInteractionsPerDay) * 100 
-          : null,
-        inlineSuggestionsChange: beforeMetrics.inlineSuggestionsPerDay > 0 
-          ? ((afterMetrics.inlineSuggestionsPerDay - beforeMetrics.inlineSuggestionsPerDay) / beforeMetrics.inlineSuggestionsPerDay) * 100 
-          : null,
-        inlineAcceptancesChange: beforeMetrics.inlineAcceptancesPerDay > 0 
-          ? ((afterMetrics.inlineAcceptancesPerDay - beforeMetrics.inlineAcceptancesPerDay) / beforeMetrics.inlineAcceptancesPerDay) * 100 
-          : null
-      };
-      
-      return {
-        userId: userData.userId,
-        adoptionDate: adoptionDate.format('YYYY-MM-DD'),
-        windowDays: windowDuration,
-        before: beforeMetrics,
-        after: afterMetrics,
-        changes
-      };
-    });
-    
-    res.json(adoptionImpact);
-  } catch (error) {
-    console.error('Error calculating adoption impact:', error);
-    res.status(500).json({ error: 'Failed to calculate adoption impact' });
-  }
-});
-
-// Get correlation analysis
-router.get('/api/correlation', async (req, res) => {
-  try {
-    const { userId, startDate, endDate } = req.query;
-    
-    // Get the document client from the parent module
-    const docClient = req.app.get('docClient');
-    
-    let params = {
-      TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE
-    };
-    
-    // Add filters if provided
-    if (userId) {
-      params.FilterExpression = 'UserId = :userId';
-      params.ExpressionAttributeValues = {
-        ':userId': userId
-      };
-    }
-    
-    const scanResults = await docClient.scan(params).promise();
-    
-    // Filter by date range if provided
-    let results = scanResults.Items;
-    if (startDate && endDate) {
-      const startMoment = moment(startDate).startOf('day');
-      const endMoment = moment(endDate).endOf('day');
-      
-      results = results.filter(item => {
-        const itemDate = parseDate(item.Date);
-        if (!itemDate) return false;
-        
-        return itemDate.isBetween(startMoment, endMoment, null, '[]');
+    // Validate parameters
+    if (!startDate || !endDate) {
+      return res.status(400).json({ 
+        error: 'Start date and end date are required',
+        code: 'INVALID_PARAMETERS'
       });
     }
     
-    // Prepare data for correlation analysis
-    const correlationData = results.map(item => {
-      return {
-        date: item.Date,
-        chatAICodeLines: parseInt(item.Chat_AICodeLines || 0),
-        chatMessagesInteracted: parseInt(item.Chat_MessagesInteracted || 0),
-        inlineAICodeLines: parseInt(item.Inline_AICodeLines || 0),
-        inlineAcceptanceCount: parseInt(item.Inline_AcceptanceCount || 0),
-        inlineSuggestionsCount: parseInt(item.Inline_SuggestionsCount || 0),
-        totalAICodeLines: parseInt(item.Chat_AICodeLines || 0) + parseInt(item.Inline_AICodeLines || 0)
-      };
-    });
+    // Validate metric parameter
+    const validMetrics = ['aiCodeLines', 'chatInteractions', 'inlineSuggestions', 'inlineAcceptances'];
+    if (!validMetrics.includes(metric)) {
+      return res.status(400).json({ 
+        error: `Invalid metric. Must be one of: ${validMetrics.join(', ')}`,
+        code: 'INVALID_PARAMETERS'
+      });
+    }
     
-    // Calculate correlation coefficients
-    const correlations = calculateCorrelations(correlationData);
+    // Set up query parameters
+    const params = {
+      TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
+      FilterExpression: '#date BETWEEN :startDate AND :endDate',
+      ExpressionAttributeNames: {
+        '#date': 'Date'
+      },
+      ExpressionAttributeValues: {
+        ':startDate': startDate,
+        ':endDate': endDate
+      }
+    };
     
-    // Prepare scatter plot data
-    const scatterData = prepareScatterData(correlationData);
+    // Use scan operation (consider optimizing with query if possible)
+    const result = await docClient.scan(params).promise();
     
-    res.json({
-      correlations,
-      scatterData
-    });
+    // Calculate correlation data
+    const correlationData = calculateCorrelation(result.Items, metric);
+    
+    res.json(correlationData);
   } catch (error) {
-    console.error('Error calculating correlations:', error);
-    res.status(500).json({ error: 'Failed to calculate correlations' });
+    logger.error('Error fetching correlation analysis:', { error: error.message, stack: error.stack });
+    res.status(500).json({ 
+      error: 'An error occurred while fetching correlation analysis',
+      code: 'INTERNAL_SERVER_ERROR'
+    });
   }
 });
 
-// Helper function to parse date from various formats
-const parseDate = (dateString) => {
-  if (typeof dateString === 'string') {
-    // Try different date formats
-    if (dateString.includes('-')) {
-      // Format: YYYY-MM-DD
-      return moment(dateString);
-    } else if (dateString.includes('/')) {
-      // Format: MM/DD/YYYY
-      return moment(dateString, 'MM/DD/YYYY');
-    } else {
-      // Format: MM-DD-YYYY
-      return moment(dateString, 'MM-DD-YYYY');
+/**
+ * Export trend data in CSV format
+ */
+router.get('/export', authorize, async (req, res) => {
+  try {
+    const { type, userId, startDate, endDate } = req.query;
+    
+    // Validate parameters
+    if (!type || !startDate || !endDate) {
+      return res.status(400).json({ 
+        error: 'Type, start date, and end date are required',
+        code: 'INVALID_PARAMETERS'
+      });
     }
-  } 
-  // If Date is in DynamoDB format with S attribute
-  else if (dateString && dateString.S) {
-    return moment(dateString.S);
-  }
-  return null;
-};
-
-// Helper function to group data by time period (day, week, month)
-const groupByTimePeriod = (data, period) => {
-  const groupedData = {};
-  
-  data.forEach(item => {
-    const date = parseDate(item.Date);
-    if (!date) return;
     
-    let periodKey;
+    // Validate type parameter
+    const validTypes = ['productivity', 'adoption', 'correlation'];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ 
+        error: `Invalid type. Must be one of: ${validTypes.join(', ')}`,
+        code: 'INVALID_PARAMETERS'
+      });
+    }
     
-    switch(period) {
-      case 'day':
-        periodKey = date.format('YYYY-MM-DD');
+    // Set up query parameters
+    const params = {
+      TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
+      FilterExpression: '#date BETWEEN :startDate AND :endDate',
+      ExpressionAttributeNames: {
+        '#date': 'Date'
+      },
+      ExpressionAttributeValues: {
+        ':startDate': startDate,
+        ':endDate': endDate
+      }
+    };
+    
+    // Add user filter if provided
+    if (userId) {
+      params.FilterExpression += ' AND UserId = :userId';
+      params.ExpressionAttributeValues[':userId'] = userId;
+    }
+    
+    // Use scan operation
+    const result = await docClient.scan(params).promise();
+    
+    // Generate CSV data based on type
+    let csvData;
+    switch (type) {
+      case 'productivity':
+        csvData = generateProductivityCsv(result.Items);
         break;
-      case 'week':
-        periodKey = `${date.year()}-W${date.isoWeek()}`;
-        break;
-      case 'month':
-        periodKey = date.format('YYYY-MM');
-        break;
-      default:
-        periodKey = date.format('YYYY-MM-DD');
-    }
-    
-    if (!groupedData[periodKey]) {
-      groupedData[periodKey] = {
-        period: periodKey,
-        aiCodeLines: 0,
-        chatInteractions: 0,
-        inlineSuggestions: 0,
-        inlineAcceptances: 0,
-        count: 0
-      };
-    }
-    
-    // Parse numeric values (handling potential undefined values)
-    const chatAICodeLines = parseInt(item.Chat_AICodeLines || 0);
-    const chatMessagesInteracted = parseInt(item.Chat_MessagesInteracted || 0);
-    const inlineAICodeLines = parseInt(item.Inline_AICodeLines || 0);
-    const inlineAcceptanceCount = parseInt(item.Inline_AcceptanceCount || 0);
-    const inlineSuggestionsCount = parseInt(item.Inline_SuggestionsCount || 0);
-    
-    // Update totals
-    groupedData[periodKey].aiCodeLines += chatAICodeLines + inlineAICodeLines;
-    groupedData[periodKey].chatInteractions += chatMessagesInteracted;
-    groupedData[periodKey].inlineSuggestions += inlineSuggestionsCount;
-    groupedData[periodKey].inlineAcceptances += inlineAcceptanceCount;
-    groupedData[periodKey].count += 1;
-  });
-  
-  // Convert to array and sort by period
-  return Object.values(groupedData).sort((a, b) => {
-    return a.period.localeCompare(b.period);
-  });
-};
-
-// Calculate moving averages for trend smoothing
-const calculateMovingAverages = (data, windowSize = 3) => {
-  const result = [];
-  
-  for (let i = 0; i < data.length; i++) {
-    const window = [];
-    for (let j = Math.max(0, i - windowSize + 1); j <= i; j++) {
-      window.push(data[j]);
-    }
-    
-    const avgItem = { ...data[i] };
-    
-    // Calculate averages for each metric
-    const metrics = ['aiCodeLines', 'chatInteractions', 'inlineSuggestions', 'inlineAcceptances'];
-    metrics.forEach(metric => {
-      const sum = window.reduce((acc, item) => acc + item[metric], 0);
-      avgItem[`${metric}MA`] = sum / window.length;
-    });
-    
-    result.push(avgItem);
-  }
-  
-  return result;
-};
-
-// Calculate growth rates between periods
-const calculateGrowthRates = (data) => {
-  const result = [];
-  
-  for (let i = 0; i < data.length; i++) {
-    const item = { ...data[i] };
-    
-    if (i > 0) {
-      const prevItem = data[i-1];
-      const metrics = ['aiCodeLines', 'chatInteractions', 'inlineSuggestions', 'inlineAcceptances'];
-      
-      metrics.forEach(metric => {
-        if (prevItem[metric] > 0) {
-          item[`${metric}Growth`] = ((item[metric] - prevItem[metric]) / prevItem[metric]) * 100;
-        } else {
-          item[`${metric}Growth`] = 0;
+      case 'adoption':
+        if (!userId) {
+          return res.status(400).json({ 
+            error: 'User ID is required for adoption export',
+            code: 'INVALID_PARAMETERS'
+          });
         }
-      });
-    } else {
-      // First item has no growth rate
-      item.aiCodeLinesGrowth = 0;
-      item.chatInteractionsGrowth = 0;
-      item.inlineSuggestionsGrowth = 0;
-      item.inlineAcceptancesGrowth = 0;
+        csvData = generateAdoptionCsv(result.Items, userId);
+        break;
+      case 'correlation':
+        csvData = generateCorrelationCsv(result.Items);
+        break;
     }
     
-    result.push(item);
-  }
-  
-  return result;
-};
-
-// Calculate productivity metrics
-const calculateProductivityMetrics = (data) => {
-  return data.map(item => {
-    const result = { ...item };
+    // Set headers for CSV download
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=${type}-trends-${startDate}-to-${endDate}.csv`);
     
-    // Calculate acceptance rate
-    if (item.inlineSuggestions > 0) {
-      result.acceptanceRate = (item.inlineAcceptances / item.inlineSuggestions) * 100;
-    } else {
-      result.acceptanceRate = 0;
-    }
-    
-    // Calculate productivity score (a composite metric)
-    result.productivityScore = (
-      (item.aiCodeLines * 0.4) + 
-      (item.chatInteractions * 0.2) + 
-      (item.inlineAcceptances * 0.4)
-    );
-    
-    return result;
-  });
-};
-
-// Calculate correlation coefficients
-const calculateCorrelations = (data) => {
-  // Define the metrics to correlate
-  const metrics = [
-    'chatAICodeLines',
-    'chatMessagesInteracted',
-    'inlineAICodeLines',
-    'inlineAcceptanceCount',
-    'inlineSuggestionsCount',
-    'totalAICodeLines'
-  ];
-  
-  const correlations = {};
-  
-  // Calculate correlation between each pair of metrics
-  for (let i = 0; i < metrics.length; i++) {
-    for (let j = i + 1; j < metrics.length; j++) {
-      const metric1 = metrics[i];
-      const metric2 = metrics[j];
-      
-      // Extract values for the two metrics
-      const values1 = data.map(item => item[metric1]);
-      const values2 = data.map(item => item[metric2]);
-      
-      // Calculate correlation coefficient
-      const correlation = pearsonCorrelation(values1, values2);
-      
-      // Store the correlation
-      if (!correlations[metric1]) {
-        correlations[metric1] = {};
-      }
-      correlations[metric1][metric2] = correlation;
-      
-      // Store the reverse correlation as well
-      if (!correlations[metric2]) {
-        correlations[metric2] = {};
-      }
-      correlations[metric2][metric1] = correlation;
-    }
+    res.send(csvData);
+  } catch (error) {
+    logger.error('Error exporting trend data:', { error: error.message, stack: error.stack });
+    res.status(500).json({ 
+      error: 'An error occurred while exporting trend data',
+      code: 'INTERNAL_SERVER_ERROR'
+    });
   }
-  
-  return correlations;
-};
-
-// Calculate Pearson correlation coefficient
-const pearsonCorrelation = (x, y) => {
-  const n = x.length;
-  
-  // Calculate means
-  const meanX = x.reduce((sum, val) => sum + val, 0) / n;
-  const meanY = y.reduce((sum, val) => sum + val, 0) / n;
-  
-  // Calculate covariance and standard deviations
-  let covariance = 0;
-  let varX = 0;
-  let varY = 0;
-  
-  for (let i = 0; i < n; i++) {
-    const diffX = x[i] - meanX;
-    const diffY = y[i] - meanY;
-    
-    covariance += diffX * diffY;
-    varX += diffX * diffX;
-    varY += diffY * diffY;
-  }
-  
-  // Handle division by zero
-  if (varX === 0 || varY === 0) {
-    return 0;
-  }
-  
-  // Calculate correlation coefficient
-  return covariance / Math.sqrt(varX * varY);
-};
-
-// Prepare scatter plot data for visualization
-const prepareScatterData = (data) => {
-  // Define the metrics to include in scatter plots
-  const metrics = [
-    'chatAICodeLines',
-    'chatMessagesInteracted',
-    'inlineAICodeLines',
-    'inlineAcceptanceCount',
-    'inlineSuggestionsCount',
-    'totalAICodeLines'
-  ];
-  
-  const scatterData = {};
-  
-  // Create scatter plot data for each pair of metrics
-  for (let i = 0; i < metrics.length; i++) {
-    for (let j = i + 1; j < metrics.length; j++) {
-      const metric1 = metrics[i];
-      const metric2 = metrics[j];
-      
-      // Create data points for the scatter plot
-      const points = data.map(item => ({
-        x: item[metric1],
-        y: item[metric2],
-        date: item.date
-      }));
-      
-      // Store the scatter plot data
-      const key = `${metric1}_vs_${metric2}`;
-      scatterData[key] = {
-        xLabel: metric1,
-        yLabel: metric2,
-        points
-      };
-    }
-  }
-  
-  return scatterData;
-};
-
-module.exports = router;
+});
