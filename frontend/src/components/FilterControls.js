@@ -1,31 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import axios from 'axios';
 
-const FilterControls = ({ onFilterChange }) => {
-  const [users, setUsers] = useState([]);
+const FilterControls = ({ onFilterChange, users, loading }) => {
+
   const [selectedUser, setSelectedUser] = useState('');
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const fetchUsers = async () => {
-      setLoading(true);
-      try {
-        const response = await axios.get(`${process.env.REACT_APP_API_URL}/users`);
-        setUsers(response.data);
-      } catch (error) {
-        console.error('Error fetching users:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUsers();
-  }, []);
-
+  
   const handleApplyFilters = () => {
     onFilterChange({
       userId: selectedUser,
