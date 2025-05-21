@@ -138,7 +138,12 @@ router.get('/type-distribution', async (req, res) => {
       distribution
     });
   } catch (error) {
+});
+  } catch (error) {
     console.error('Error fetching prompt type distribution:', error);
+    res.status(500).json({ error: 'An error occurred while fetching prompt type distribution' });
+  }
+});
     res.status(500).json({ error: 'Failed to fetch prompt type distribution' });
   }
 });
