@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Bar, Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -10,6 +10,7 @@ import {
   Title,
   Tooltip,
   Legend,
+  Colors,
 } from 'chart.js';
 import FilterControls from './FilterControls';
 import SummaryCard from './SummaryCard';
@@ -26,7 +27,8 @@ ChartJS.register(
   PointElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  Colors
 );
 
 const Dashboard = ({users, loadingUsers}) => {
@@ -35,6 +37,7 @@ const Dashboard = ({users, loadingUsers}) => {
   const [filters, setFilters] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [activeVisualization, setActiveVisualization] = useState('comparison'); // Default visualization
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
 
@@ -87,8 +90,114 @@ const Dashboard = ({users, loadingUsers}) => {
     fetchData();
   }, [filters, users]);
 
+  // Prepare chart data for Suggestions vs Acceptances over time
+  const prepareSuggestionsVsAcceptancesData = useMemo(() => {
+    if (!summaryData || !summaryData.suggestionsVsAcceptances || summaryData.suggestionsVsAcceptances.length === 0) return null;
+    
+    return {
+      labels: summaryData.suggestionsVsAcceptances.map(item => item.date),
+      datasets: [
+        {
+          label: 'Suggestions',
+          data: summaryData.suggestionsVsAcceptances.map(item => item.suggestions),
+          borderColor: 'rgba(54, 162, 235, 1)',
+          backgroundColor: 'rgba(54, 162, 235, 0.2)',
+          tension: 0.4,
+          fill: true,
+        },
+        {
+          label: 'Acceptances',
+          data: summaryData.suggestionsVsAcceptances.map(item => item.acceptances),
+          borderColor: 'rgba(75, 192, 192, 1)',
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
+          tension: 0.4,
+          fill: true,
+        },
+      ],
+    };
+  }, [summaryData]);
+
+
+
+  // Prepare data for day of week heatmap
+  const prepareDayOfWeekData = useMemo(() => {
+    if (!summaryData || !summaryData.byDayOfWeek || summaryData.byDayOfWeek.length === 0) return null;
+    
+    return {
+      labels: summaryData.byDayOfWeek.map(item => item.dayName),
+      datasets: [
+        {
+          label: 'Acceptance Rate (%)',
+          data: summaryData.byDayOfWeek.map(item => item.rate),
+          backgroundColor: summaryData.byDayOfWeek.map(item => {
+            // Color gradient based on acceptance rate
+            const rate = item.rate;
+            if (rate >= 80) return 'rgba(0, 200, 0, 0.8)';
+            if (rate >= 60) return 'rgba(100, 200, 0, 0.7)';
+            if (rate >= 40) return 'rgba(200, 200, 0, 0.6)';
+            if (rate >= 20) return 'rgba(200, 100, 0, 0.5)';
+            return 'rgba(200, 0, 0, 0.4)';
+          }),
+          borderWidth: 1,
+          borderColor: '#ccc',
+        }
+      ]
+    };
+  }, [summaryData]);
+
+  // Prepare trend analysis data
+  const prepareTrendAnalysisData = useMemo(() => {
+    if (!summaryData || !summaryData.trendAnalysis || !summaryData.trendAnalysis.daily || summaryData.trendAnalysis.daily.length === 0) return null;
+    
+    return {
+      labels: summaryData.trendAnalysis.daily.map(item => item.date),
+      datasets: [
+        {
+          label: 'Daily Acceptance Rate (%)',
+          data: summaryData.trendAnalysis.daily.map(item => item.acceptanceRate),
+          borderColor: 'rgba(75, 192, 192, 1)',
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
+          tension: 0.4,
+          fill: false,
+        },
+        {
+          label: 'Weekly Trend',
+          data: summaryData.trendAnalysis.daily.map((dailyItem, index) => {
+            // Find if there's a weekly data point for this date
+            const weeklyData = summaryData.trendAnalysis.weekly.find(w => w.date === dailyItem.date);
+            
+            // Return weekly data if it exists for this date, otherwise null
+            return weeklyData ? weeklyData.acceptanceRate : null;
+          }),         
+          borderColor: 'rgba(153, 102, 255, 1)',
+          backgroundColor: 'rgba(153, 102, 255, 1)',
+          pointRadius: 6,
+          pointHoverRadius: 8,
+          showLine: false,
+          type: 'scatter',
+        },
+        {
+          label: 'Monthly Trend',
+          data: summaryData.trendAnalysis.daily.map((dailyItem, index) => {
+            // Find if there's a monthly data point for this date
+            const monthlyData = summaryData.trendAnalysis.monthly.find(m => m.date === dailyItem.date);
+            
+            // Return monthly data if it exists for this date, otherwise null
+            return monthlyData ? monthlyData.acceptanceRate : null;
+          }),         
+          borderColor: 'rgba(255, 99, 132, 1)',
+          backgroundColor: 'rgba(255, 99, 132, 1)',
+          pointRadius: 8,
+          pointHoverRadius: 10,
+          showLine: false,
+          type: 'scatter',
+        }
+      ]
+    };
+  }, [summaryData]);
+
   // Prepare chart data for AI Code Lines per Developer
-  const prepareBarChartData = () => {
+  const prepareBarChartData = useMemo(() => {
     if (!summaryData || !summaryData.byUser || summaryData.byUser.length === 0) return null;
     
     return {
@@ -114,10 +223,10 @@ const Dashboard = ({users, loadingUsers}) => {
         },
       ],
     };
-  };
+  }, [summaryData]);
 
   // Prepare chart data for AI Code Lines over Time
-  const prepareLineChartData = () => {
+  const prepareLineChartData = useMemo(() => {
     if (!summaryData || !summaryData.byDate || summaryData.byDate.length === 0) return null;
     
     return {
@@ -141,10 +250,7 @@ const Dashboard = ({users, loadingUsers}) => {
         },
       ],
     };
-  };
-
-  const barChartData = prepareBarChartData();
-  const lineChartData = prepareLineChartData();
+  }, [summaryData]);
 
   const chartOptions = {
     responsive: true,
@@ -153,6 +259,82 @@ const Dashboard = ({users, loadingUsers}) => {
       legend: {
         position: 'top',
       },
+    },
+  };
+  
+
+  
+  // Options for day of week chart
+  const dayOfWeekOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: {
+        beginAtZero: true,
+        max: 100,
+        title: {
+          display: true,
+          text: 'Acceptance Rate (%)'
+        }
+      },
+      x: {
+        title: {
+          display: true,
+          text: 'Day of Week'
+        }
+      }
+    },
+    plugins: {
+      legend: {
+        position: 'top',
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context) {
+            return `Acceptance Rate: ${context.raw.toFixed(1)}%`;
+          }
+        }
+      }
+    }
+  };
+  
+  // Options for trend analysis
+  const trendOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: {
+        beginAtZero: true,
+        max: 100,
+        title: {
+          display: true,
+          text: 'Acceptance Rate (%)'
+        }
+      }
+    },
+    plugins: {
+      legend: {
+        position: 'top',
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context) {
+            let value = context.raw;
+            if (context.dataset.label === 'Weekly Trend') {
+              return value !== null && value !== undefined 
+                ? `Weekly Average: ${value.toFixed(2)}%` 
+                : 'No weekly data';
+            } else if (context.dataset.label === 'Monthly Trend') {
+              return value !== null && value !== undefined 
+                ? `Monthly Average: ${value.toFixed(2)}%` 
+                : 'No monthly data';
+            }
+            return value !== null && value !== undefined 
+              ? `Daily Rate: ${value.toFixed(2)}%` 
+              : 'No data';
+          }
+        }
+      }
     },
   };
 
@@ -164,7 +346,7 @@ const Dashboard = ({users, loadingUsers}) => {
       
       {loading && (
         <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amazon-teal"></div>
+          <div data-testid="loading-spinner" className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amazon-teal"></div>
         </div>
       )}
       
@@ -212,13 +394,76 @@ const Dashboard = ({users, loadingUsers}) => {
             />
           </div>
           
-          {/* Charts */}
+          {/* Enhanced Acceptance Visualizations */}
+          <div className="bg-white p-4 rounded-lg shadow mb-8">
+            <h2 className="text-lg font-semibold mb-4">Acceptance Metrics</h2>
+            
+            {/* Visualization Type Selector */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              <button
+                className={`px-3 py-1 rounded-md ${activeVisualization === 'comparison' ? 'bg-amazon-teal text-white' : 'bg-gray-200'}`}
+                onClick={() => setActiveVisualization('comparison')}
+              >
+                Suggestions vs. Acceptances
+              </button>
+
+              <button
+                className={`px-3 py-1 rounded-md ${activeVisualization === 'dayOfWeek' ? 'bg-amazon-teal text-white' : 'bg-gray-200'}`}
+                onClick={() => setActiveVisualization('dayOfWeek')}
+              >
+                Day of Week
+              </button>
+              <button
+                className={`px-3 py-1 rounded-md ${activeVisualization === 'trend' ? 'bg-amazon-teal text-white' : 'bg-gray-200'}`}
+                onClick={() => setActiveVisualization('trend')}
+              >
+                Trend Analysis
+              </button>
+            </div>
+            
+            {/* Visualization Display */}
+            <div className="h-80">
+              {activeVisualization === 'comparison' && (
+                prepareSuggestionsVsAcceptancesData ? (
+                  <Line data={prepareSuggestionsVsAcceptancesData} options={chartOptions} />
+                ) : (
+                  <div className="flex justify-center items-center h-full text-gray-500">
+                    No data available for suggestions vs. acceptances
+                  </div>
+                )
+              )}
+              
+
+              
+              {activeVisualization === 'dayOfWeek' && (
+                prepareDayOfWeekData ? (
+                  <Bar data={prepareDayOfWeekData} options={dayOfWeekOptions} />
+                ) : (
+                  <div className="flex justify-center items-center h-full text-gray-500">
+                    No data available for day of week analysis
+                  </div>
+                )
+              )}
+              
+              {activeVisualization === 'trend' && (
+                prepareTrendAnalysisData ? (
+                  <Line data={prepareTrendAnalysisData} options={trendOptions} />
+                ) : (
+                  <div className="flex justify-center items-center h-full text-gray-500">
+                    No data available for trend analysis
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+          
+          {/* Original Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <div className="bg-white p-4 rounded-lg shadow">
               <h2 className="text-lg font-semibold mb-4">AI Code Lines per Developer</h2>
               <div className="h-80">
-                {barChartData ? (
-                  <Bar data={barChartData} options={chartOptions} />
+                {prepareBarChartData ? (
+                  <Bar data={prepareBarChartData} options={chartOptions} />
                 ) : (
                   <div className="flex justify-center items-center h-full text-gray-500">
                     No data available
@@ -229,8 +474,8 @@ const Dashboard = ({users, loadingUsers}) => {
             <div className="bg-white p-4 rounded-lg shadow">
               <h2 className="text-lg font-semibold mb-4">AI Code Lines over Time</h2>
               <div className="h-80">
-                {lineChartData ? (
-                  <Line data={lineChartData} options={chartOptions} />
+                {prepareLineChartData ? (
+                  <Line data={prepareLineChartData} options={chartOptions} />
                 ) : (
                   <div className="flex justify-center items-center h-full text-gray-500">
                     No data available

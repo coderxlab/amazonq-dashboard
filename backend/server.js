@@ -116,6 +116,8 @@ app.get('/api/activity', async (req, res) => {
   }
 });
 
+
+
 // Get activity summary metrics
 app.get('/api/activity/summary', async (req, res) => {
   try {
@@ -181,9 +183,22 @@ app.get('/api/activity/summary', async (req, res) => {
       totalInlineAcceptances: 0,
       acceptanceRate: 0,
       byUser: {},
-      byDate: {}
+      byDate: {},
+      // New data structures for enhanced visualizations
+      byDayOfWeek: Array(7).fill().map(() => ({ 
+        suggestions: 0, 
+        acceptances: 0, 
+        rate: 0 
+      })),
+      trendAnalysis: {
+        daily: [],
+        weekly: [],
+        monthly: []
+      },
+      suggestionsVsAcceptances: []
     };
     
+    // Process each item for summary metrics
     results.forEach(item => {
       // Parse numeric values (handling potential undefined values)
       const chatAICodeLines = parseInt(item.Chat_AICodeLines || 0);
@@ -229,12 +244,134 @@ app.get('/api/activity/summary', async (req, res) => {
       summary.byDate[item.Date].chatInteractions += chatMessagesInteracted;
       summary.byDate[item.Date].inlineSuggestions += inlineSuggestionsCount;
       summary.byDate[item.Date].inlineAcceptances += inlineAcceptanceCount;
+      
+      // Extract time information for heatmap
+      let itemDateTime;
+      
+      // Handle different timestamp formats
+      if (item.TimeStamp) {
+        itemDateTime = moment(item.TimeStamp);
+      } else if (item.Timestamp) {
+        itemDateTime = moment(item.Timestamp);
+      } else if (item.timestamp) {
+        itemDateTime = moment(item.timestamp);
+      } else {
+        // If no timestamp, try to use date with a default time
+        if (typeof item.Date === 'string') {
+          itemDateTime = moment(item.Date);
+        } else if (item.Date && item.Date.S) {
+          itemDateTime = moment(item.Date.S);
+        } else {
+          // Skip this item for time-based aggregation
+          return;
+        }
+      }
+      
+      // Aggregate by day of week (0-6, where 0 is Sunday)
+      const dayOfWeek = itemDateTime.day();
+      summary.byDayOfWeek[dayOfWeek].suggestions += inlineSuggestionsCount;
+      summary.byDayOfWeek[dayOfWeek].acceptances += inlineAcceptanceCount;
+      
+      // Add to suggestions vs acceptances time series
+      summary.suggestionsVsAcceptances.push({
+        date: item.Date,
+        suggestions: inlineSuggestionsCount,
+        acceptances: inlineAcceptanceCount,
+        timestamp: itemDateTime.valueOf() // For sorting
+      });
     });
     
-    // Calculate acceptance rate
+    // Calculate acceptance rates for day of week
+    summary.byDayOfWeek = summary.byDayOfWeek.map((day, index) => ({
+      day: index,
+      dayName: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][index],
+      suggestions: day.suggestions,
+      acceptances: day.acceptances,
+      rate: day.suggestions > 0 ? (day.acceptances / day.suggestions) * 100 : 0
+    }));
+    
+    // Sort suggestions vs acceptances by date
+    summary.suggestionsVsAcceptances.sort((a, b) => a.timestamp - b.timestamp);
+    
+    // Calculate overall acceptance rate
     if (summary.totalInlineSuggestions > 0) {
       summary.acceptanceRate = (summary.totalInlineAcceptances / summary.totalInlineSuggestions) * 100;
     }
+    
+    // Generate trend analysis
+    // Convert byDate to array and sort by date
+    const dateArray = Object.values(summary.byDate).sort((a, b) => moment(a.date).diff(moment(b.date)));
+    
+    // Calculate daily trend (7-day moving average)
+    const dailyWindow = 7;
+    for (let i = 0; i < dateArray.length; i++) {
+      const windowStart = Math.max(0, i - dailyWindow + 1);
+      const windowEnd = i + 1;
+      const windowData = dateArray.slice(windowStart, windowEnd);
+      
+      const totalSuggestions = windowData.reduce((sum, item) => sum + item.inlineSuggestions, 0);
+      const totalAcceptances = windowData.reduce((sum, item) => sum + item.inlineAcceptances, 0);
+      
+      const trendPoint = {
+        date: dateArray[i].date,
+        acceptanceRate: totalSuggestions > 0 ? (totalAcceptances / totalSuggestions) * 100 : 0,
+        movingAverageDays: Math.min(i + 1, dailyWindow)
+      };
+      
+      summary.trendAnalysis.daily.push(trendPoint);
+    }
+    
+    // Calculate weekly trend
+    const weeklyData = {};
+    dateArray.forEach(item => {
+      const weekNumber = moment(item.date).week();
+      const year = moment(item.date).year();
+      const weekKey = `${year}-W${weekNumber}`;
+      
+      if (!weeklyData[weekKey]) {
+        weeklyData[weekKey] = {
+          weekKey,
+          date: item.date, // Use the first date of this week
+          suggestions: 0,
+          acceptances: 0
+        };
+      }
+      
+      weeklyData[weekKey].suggestions += item.inlineSuggestions;
+      weeklyData[weekKey].acceptances += item.inlineAcceptances;
+    });
+    
+    // Convert weekly data to array and calculate rates
+    summary.trendAnalysis.weekly = Object.values(weeklyData).map(week => ({
+      weekKey: week.weekKey,
+      date: week.date,
+      acceptanceRate: week.suggestions > 0 ? (week.acceptances / week.suggestions) * 100 : 0
+    })).sort((a, b) => moment(a.date).diff(moment(b.date)));
+    
+    // Calculate monthly trend
+    const monthlyData = {};
+    dateArray.forEach(item => {
+      const monthKey = moment(item.date).format('YYYY-MM');
+      
+      if (!monthlyData[monthKey]) {
+        monthlyData[monthKey] = {
+          monthKey,
+          date: item.date, // Use the first date of this month
+          suggestions: 0,
+          acceptances: 0
+        };
+      }
+      
+      monthlyData[monthKey].suggestions += item.inlineSuggestions;
+      monthlyData[monthKey].acceptances += item.inlineAcceptances;
+    });
+    
+    // Convert monthly data to array and calculate rates
+    summary.trendAnalysis.monthly = Object.values(monthlyData).map(month => ({
+      monthKey: month.monthKey,
+      date: month.date,
+      acceptanceRate: month.suggestions > 0 ? (month.acceptances / month.suggestions) * 100 : 0
+    })).sort((a, b) => moment(a.date).diff(moment(b.date)));
     
     // Convert byUser and byDate objects to arrays for easier frontend processing
     summary.byUser = Object.values(summary.byUser);
