@@ -447,12 +447,6 @@ mockApp.get('/api/activity/summary', (req, res) => {
         inlineAcceptances: 35
       }
     ],
-    byHourOfDay: Array(24).fill().map((_, i) => ({
-      hour: i,
-      suggestions: 5,
-      acceptances: 3,
-      rate: 60
-    })),
     byDayOfWeek: [
       { day: 'Sunday', dayIndex: 0, suggestions: 15, acceptances: 10, rate: 66.7 },
       { day: 'Monday', dayIndex: 1, suggestions: 20, acceptances: 15, rate: 75 },
@@ -483,18 +477,9 @@ describe('API Endpoints', () => {
       expect(response.body).toHaveProperty('acceptanceRate');
       
       // Check for enhanced visualization data
-      expect(response.body).toHaveProperty('byHourOfDay');
-      expect(response.body.byHourOfDay).toHaveLength(24);
       expect(response.body).toHaveProperty('byDayOfWeek');
       expect(response.body.byDayOfWeek).toHaveLength(7);
       expect(response.body).toHaveProperty('acceptanceTrend');
-      
-      // Check that hour of day data is correctly formatted
-      const hour10Data = response.body.byHourOfDay.find(h => h.hour === 10);
-      expect(hour10Data).toBeDefined();
-      expect(hour10Data).toHaveProperty('suggestions');
-      expect(hour10Data).toHaveProperty('acceptances');
-      expect(hour10Data).toHaveProperty('rate');
       
       // Check that day of week data is correctly formatted
       const mondayData = response.body.byDayOfWeek.find(d => d.day === 'Monday');

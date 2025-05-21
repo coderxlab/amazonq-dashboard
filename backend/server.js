@@ -185,11 +185,6 @@ app.get('/api/activity/summary', async (req, res) => {
       byUser: {},
       byDate: {},
       // New data structures for enhanced visualizations
-      byHourOfDay: Array(24).fill().map(() => ({ 
-        suggestions: 0, 
-        acceptances: 0, 
-        rate: 0 
-      })),
       byDayOfWeek: Array(7).fill().map(() => ({ 
         suggestions: 0, 
         acceptances: 0, 
@@ -272,11 +267,6 @@ app.get('/api/activity/summary', async (req, res) => {
         }
       }
       
-      // Aggregate by hour of day (0-23)
-      const hourOfDay = itemDateTime.hour();
-      summary.byHourOfDay[hourOfDay].suggestions += inlineSuggestionsCount;
-      summary.byHourOfDay[hourOfDay].acceptances += inlineAcceptanceCount;
-      
       // Aggregate by day of week (0-6, where 0 is Sunday)
       const dayOfWeek = itemDateTime.day();
       summary.byDayOfWeek[dayOfWeek].suggestions += inlineSuggestionsCount;
@@ -291,14 +281,7 @@ app.get('/api/activity/summary', async (req, res) => {
       });
     });
     
-    // Calculate acceptance rates for heatmap
-    summary.byHourOfDay = summary.byHourOfDay.map((hour, index) => ({
-      hour: index,
-      suggestions: hour.suggestions,
-      acceptances: hour.acceptances,
-      rate: hour.suggestions > 0 ? (hour.acceptances / hour.suggestions) * 100 : 0
-    }));
-    
+    // Calculate acceptance rates for day of week
     summary.byDayOfWeek = summary.byDayOfWeek.map((day, index) => ({
       day: index,
       dayName: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][index],

@@ -117,42 +117,7 @@ const Dashboard = ({users, loadingUsers}) => {
     };
   }, [summaryData]);
 
-  // Prepare heatmap data for acceptance rates by hour of day
-  const prepareHeatmapData = useMemo(() => {
-    if (!summaryData || !summaryData.byHourOfDay || summaryData.byHourOfDay.length === 0) return null;
-    
-    // Format hours for display (e.g., "9 AM", "2 PM")
-    const hourLabels = summaryData.byHourOfDay.map(item => {
-      const hour = item.hour;
-      if (hour === 0) return '12 AM';
-      if (hour === 12) return '12 PM';
-      return hour < 12 ? `${hour} AM` : `${hour - 12} PM`;
-    });
-    
-    // Create dataset for heatmap
-    const dataset = {
-      labels: hourLabels,
-      datasets: [
-        {
-          label: 'Acceptance Rate (%)',
-          data: summaryData.byHourOfDay.map(item => item.rate),
-          backgroundColor: summaryData.byHourOfDay.map(item => {
-            // Color gradient based on acceptance rate
-            const rate = item.rate;
-            if (rate >= 80) return 'rgba(0, 200, 0, 0.8)';
-            if (rate >= 60) return 'rgba(100, 200, 0, 0.7)';
-            if (rate >= 40) return 'rgba(200, 200, 0, 0.6)';
-            if (rate >= 20) return 'rgba(200, 100, 0, 0.5)';
-            return 'rgba(200, 0, 0, 0.4)';
-          }),
-          borderWidth: 1,
-          borderColor: '#ccc',
-        }
-      ]
-    };
-    
-    return dataset;
-  }, [summaryData]);
+
 
   // Prepare data for day of week heatmap
   const prepareDayOfWeekData = useMemo(() => {
@@ -293,8 +258,10 @@ const Dashboard = ({users, loadingUsers}) => {
     },
   };
   
-  // Options specific for bar charts (heatmap)
-  const heatmapOptions = {
+
+  
+  // Options for day of week chart
+  const dayOfWeekOptions = {
     responsive: true,
     maintainAspectRatio: false,
     scales: {
@@ -309,7 +276,7 @@ const Dashboard = ({users, loadingUsers}) => {
       x: {
         title: {
           display: true,
-          text: 'Hour of Day'
+          text: 'Day of Week'
         }
       }
     },
@@ -322,20 +289,6 @@ const Dashboard = ({users, loadingUsers}) => {
           label: function(context) {
             return `Acceptance Rate: ${context.raw.toFixed(1)}%`;
           }
-        }
-      }
-    },
-  };
-  
-  // Options for day of week chart
-  const dayOfWeekOptions = {
-    ...heatmapOptions,
-    scales: {
-      ...heatmapOptions.scales,
-      x: {
-        title: {
-          display: true,
-          text: 'Day of Week'
         }
       }
     }
@@ -440,12 +393,7 @@ const Dashboard = ({users, loadingUsers}) => {
               >
                 Suggestions vs. Acceptances
               </button>
-              <button
-                className={`px-3 py-1 rounded-md ${activeVisualization === 'heatmap' ? 'bg-amazon-teal text-white' : 'bg-gray-200'}`}
-                onClick={() => setActiveVisualization('heatmap')}
-              >
-                Time of Day Heatmap
-              </button>
+
               <button
                 className={`px-3 py-1 rounded-md ${activeVisualization === 'dayOfWeek' ? 'bg-amazon-teal text-white' : 'bg-gray-200'}`}
                 onClick={() => setActiveVisualization('dayOfWeek')}
@@ -472,15 +420,7 @@ const Dashboard = ({users, loadingUsers}) => {
                 )
               )}
               
-              {activeVisualization === 'heatmap' && (
-                prepareHeatmapData ? (
-                  <Bar data={prepareHeatmapData} options={heatmapOptions} />
-                ) : (
-                  <div className="flex justify-center items-center h-full text-gray-500">
-                    No data available for time of day heatmap
-                  </div>
-                )
-              )}
+
               
               {activeVisualization === 'dayOfWeek' && (
                 prepareDayOfWeekData ? (

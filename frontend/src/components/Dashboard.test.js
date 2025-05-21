@@ -57,12 +57,6 @@ const mockSummaryData = {
     }
   ],
   // New data structures for enhanced visualizations
-  byHourOfDay: Array(24).fill().map((_, i) => ({
-    hour: i,
-    suggestions: 30 + Math.floor(Math.random() * 20),
-    acceptances: 20 + Math.floor(Math.random() * 15),
-    rate: 60 + Math.floor(Math.random() * 30)
-  })),
   byDayOfWeek: Array(7).fill().map((_, i) => ({
     day: i,
     dayName: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][i],
@@ -136,7 +130,6 @@ describe('Dashboard Component', () => {
     await waitFor(() => {
       expect(screen.getByText('Acceptance Metrics')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /suggestions vs\. acceptances/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /time of day heatmap/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /day of week/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /trend analysis/i })).toBeInTheDocument();
     });
@@ -152,10 +145,6 @@ describe('Dashboard Component', () => {
     
     // Default visualization should be comparison (Line chart)
     expect(screen.getAllByTestId('line-chart')[0]).toBeInTheDocument();
-    
-    // Click on heatmap button
-    fireEvent.click(screen.getByRole('button', { name: /time of day heatmap/i }));
-    expect(screen.getAllByTestId('bar-chart')[0]).toBeInTheDocument();
     
     // Click on day of week button
     fireEvent.click(screen.getByRole('button', { name: /day of week/i }));
