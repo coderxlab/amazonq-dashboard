@@ -320,7 +320,6 @@ const Dashboard = ({users, loadingUsers}) => {
         callbacks: {
           label: function(context) {
             let value = context.raw;
-            console.log("context -- ", context)
             if (context.dataset.label === 'Weekly Trend') {
               return value !== null && value !== undefined 
                 ? `Weekly Average: ${value.toFixed(2)}%` 
