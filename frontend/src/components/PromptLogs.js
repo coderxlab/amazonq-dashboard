@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import FilterControls from './FilterControls';
 import { getPromptLogs } from '../services/api';
 
-const PromptLogs = () => {
+const PromptLogs = ({users, loadingUsers}) => {
   const [logs, setLogs] = useState([]);
   const [filters, setFilters] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
@@ -99,7 +99,7 @@ const PromptLogs = () => {
     <div>
       <h1 className="text-2xl font-bold mb-6">Prompt Log Viewer</h1>
       
-      <FilterControls onFilterChange={handleFilterChange} />
+      <FilterControls onFilterChange={handleFilterChange}  users={users} loadingUsers={loadingUsers}/>
       
       <div className="bg-white p-4 rounded-lg shadow mb-6">
         <div className="flex flex-col md:flex-row justify-between items-center mb-4">

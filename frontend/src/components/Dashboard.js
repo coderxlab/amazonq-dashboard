@@ -16,7 +16,6 @@ import SummaryCard from './SummaryCard';
 import ComparisonChart from './ComparisonChart';
 import { getActivitySummary, getComparativeMetrics } from '../services/api';
 import moment from 'moment';
-import axios from 'axios';
 
 // Register ChartJS components
 ChartJS.register(
@@ -30,9 +29,7 @@ ChartJS.register(
   Legend
 );
 
-const Dashboard = () => {
-  const [users, setUsers] = useState([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
+const Dashboard = ({users, loadingUsers}) => {
   const [summaryData, setSummaryData] = useState(null);
   const [comparisonData, setComparisonData] = useState(null);
   const [filters, setFilters] = useState({});
@@ -40,22 +37,6 @@ const Dashboard = () => {
   const [error, setError] = useState(null);
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
-
-  useEffect(() => {
-    const fetchUsers = async () => {
-      setLoadingUsers(true);
-      try {
-        const response = await axios.get(`${process.env.REACT_APP_API_URL}/users`);
-        setUsers(response.data);
-      } catch (error) {
-        console.error('Error fetching users:', error);
-      } finally {
-        setLoadingUsers(false);
-      }
-    };
-
-    fetchUsers();
-  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
