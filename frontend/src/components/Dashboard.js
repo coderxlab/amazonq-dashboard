@@ -87,8 +87,9 @@ const Dashboard = () => {
         const compareEndDate = start.clone().subtract(1, 'day').format('YYYY-MM-DD');
 
         const compareData = await getComparativeMetrics({
-          ...filters,
           userIds: tempUserIds,
+          startDate: tempStartDate,
+          endDate: tempEndDate,
           compareStartDate,
           compareEndDate
         });

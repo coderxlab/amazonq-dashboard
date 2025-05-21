@@ -256,10 +256,37 @@ app.get('/api/activity/compare', async (req, res) => {
     if (!startDate || !endDate) {
       endDate = moment().format('YYYY-MM-DD');
       startDate = moment().subtract(1, 'week').format('YYYY-MM-DD');
+    } else {
+      // Validate date formats for primary date range
+      if (!moment(startDate, 'YYYY-MM-DD', true).isValid()) {
+        return res.status(400).json({ error: 'Invalid startDate format. Use YYYY-MM-DD' });
+      }
+      if (!moment(endDate, 'YYYY-MM-DD', true).isValid()) {
+        return res.status(400).json({ error: 'Invalid endDate format. Use YYYY-MM-DD' });
+      }
+      
+      // Validate date range logic
+      if (moment(endDate).isBefore(startDate)) {
+        return res.status(400).json({ error: 'endDate cannot be before startDate' });
+      }
     }
+
     if (!compareStartDate || !compareEndDate) {
       compareEndDate = moment(startDate).subtract(1, 'day').format('YYYY-MM-DD');
       compareStartDate = moment(compareEndDate).subtract(1, 'week').format('YYYY-MM-DD');
+    } else {
+      // Validate date formats for comparison date range
+      if (!moment(compareStartDate, 'YYYY-MM-DD', true).isValid()) {
+        return res.status(400).json({ error: 'Invalid compareStartDate format. Use YYYY-MM-DD' });
+      }
+      if (!moment(compareEndDate, 'YYYY-MM-DD', true).isValid()) {
+        return res.status(400).json({ error: 'Invalid compareEndDate format. Use YYYY-MM-DD' });
+      }
+      
+      // Validate comparison date range logic
+      if (moment(compareEndDate).isBefore(compareStartDate)) {
+        return res.status(400).json({ error: 'compareEndDate cannot be before compareStartDate' });
+      }
     }
 
     // Function to get metrics for a specific date range using Query operation

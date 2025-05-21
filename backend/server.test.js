@@ -95,22 +95,19 @@ describe('GET /api/activity/compare', () => {
       inlineAcceptances: 3
     });
 
-    // Verify query was called with correct parameters
-    expect(docClient.query).toHaveBeenCalledWith(
-      expect.objectContaining({
-        TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
-        IndexName: 'UserDate-index',
-        KeyConditionExpression: 'UserId = :userId AND #date BETWEEN :startDate AND :endDate',
-        ExpressionAttributeNames: {
-          '#date': 'Date'
-        },
-        ExpressionAttributeValues: {
-          ':userId': 'user1',
-          ':startDate': '2024-01-01',
-          ':endDate': '2024-01-31'
-        }
-      })
-    );
+    // Verify query parameters
+    expect(docClient.query).toHaveBeenCalledWith({
+      TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
+      KeyConditionExpression: 'UserId = :userId AND #date BETWEEN :startDate AND :endDate',
+      ExpressionAttributeNames: {
+        '#date': 'Date'
+      },
+      ExpressionAttributeValues: {
+        ':userId': 'user1',
+        ':startDate': '2024-01-01',
+        ':endDate': '2024-01-31'
+      }
+    });
   });
 
   it('should handle multiple user IDs', async () => {
@@ -145,12 +142,18 @@ describe('GET /api/activity/compare', () => {
 
     expect(response.status).toBe(200);
     expect(docClient.query).toHaveBeenCalledTimes(4); // 2 users × 2 periods
-    expect(docClient.query).toHaveBeenCalledWith(
-      expect.objectContaining({
-        IndexName: 'UserDate-index',
-        KeyConditionExpression: 'UserId = :userId AND #date BETWEEN :startDate AND :endDate'
-      })
-    );
+    expect(docClient.query).toHaveBeenCalledWith({
+      TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
+      KeyConditionExpression: 'UserId = :userId AND #date BETWEEN :startDate AND :endDate',
+      ExpressionAttributeNames: {
+        '#date': 'Date'
+      },
+      ExpressionAttributeValues: {
+        ':userId': 'user1',
+        ':startDate': '2024-01-01',
+        ':endDate': '2024-01-31'
+      }
+    });
   });
 
   it('should use default date ranges when not provided', async () => {
@@ -215,6 +218,88 @@ describe('GET /api/activity/compare', () => {
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({ error: 'Failed to fetch comparative metrics' });
+  });
+
+  it('should validate date formats', async () => {
+    // Test invalid startDate format
+    let response = await request(app)
+      .get('/api/activity/compare')
+      .query({
+        startDate: '01-01-2024', // Wrong format
+        endDate: '2024-01-31',
+        compareStartDate: '2023-12-01',
+        compareEndDate: '2023-12-31'
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: 'Invalid startDate format. Use YYYY-MM-DD' });
+
+    // Test invalid endDate format
+    response = await request(app)
+      .get('/api/activity/compare')
+      .query({
+        startDate: '2024-01-01',
+        endDate: '31/01/2024', // Wrong format
+        compareStartDate: '2023-12-01',
+        compareEndDate: '2023-12-31'
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: 'Invalid endDate format. Use YYYY-MM-DD' });
+
+    // Test invalid compareStartDate format
+    response = await request(app)
+      .get('/api/activity/compare')
+      .query({
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+        compareStartDate: '12/01/2023', // Wrong format
+        compareEndDate: '2023-12-31'
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: 'Invalid compareStartDate format. Use YYYY-MM-DD' });
+
+    // Test invalid compareEndDate format
+    response = await request(app)
+      .get('/api/activity/compare')
+      .query({
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+        compareStartDate: '2023-12-01',
+        compareEndDate: '31-12-2023' // Wrong format
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: 'Invalid compareEndDate format. Use YYYY-MM-DD' });
+  });
+
+  it('should validate date range logic', async () => {
+    // Test endDate before startDate
+    let response = await request(app)
+      .get('/api/activity/compare')
+      .query({
+        startDate: '2024-01-31',
+        endDate: '2024-01-01', // Before startDate
+        compareStartDate: '2023-12-01',
+        compareEndDate: '2023-12-31'
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: 'endDate cannot be before startDate' });
+
+    // Test compareEndDate before compareStartDate
+    response = await request(app)
+      .get('/api/activity/compare')
+      .query({
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+        compareStartDate: '2023-12-31',
+        compareEndDate: '2023-12-01' // Before compareStartDate
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: 'compareEndDate cannot be before compareStartDate' });
   });
 
   it('should fetch metrics for all users when no userIds provided', async () => {
