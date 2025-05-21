@@ -197,10 +197,13 @@ const Dashboard = ({users, loadingUsers}) => {
         },
         {
           label: 'Weekly Trend',
-          data: summaryData.trendAnalysis.weekly.map(item => ({
-            x: summaryData.trendAnalysis.daily.findIndex(d => d.date === item.date),
-            y: item.acceptanceRate
-          })),
+          data: summaryData.trendAnalysis.daily.map((dailyItem, index) => {
+            // Find if there's a weekly data point for this date
+            const weeklyData = summaryData.trendAnalysis.weekly.find(w => w.date === dailyItem.date);
+            
+            // Return weekly data if it exists for this date, otherwise null
+            return weeklyData ? weeklyData.acceptanceRate : null;
+          }),         
           borderColor: 'rgba(153, 102, 255, 1)',
           backgroundColor: 'rgba(153, 102, 255, 1)',
           pointRadius: 6,
@@ -208,7 +211,19 @@ const Dashboard = ({users, loadingUsers}) => {
           showLine: false,
           type: 'scatter',
         }
-      ]
+      ],
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              let value = context.raw; // or context.parsed.y depending on your Chart.js version
+              return value !== null && value !== undefined 
+                ? value.toFixed(2) + '%' 
+                : 'No data';
+            }
+          }
+        }
+      }
     };
   }, [summaryData]);
 
