@@ -2,26 +2,18 @@ const express = require('express');
 const router = express.Router();
 const AWS = require('aws-sdk');
 const moment = require('moment');
-const logger = require('./logger'); // We'll create this logger module later
+const logger = require('./logger');
+const {
+  groupDataByTimeInterval,
+  calculateProductivityTrends,
+  calculateAggregateMetrics,
+  calculatePercentageChanges,
+  calculateCorrelation,
+  generateProductivityCsv,
+  generateAdoptionCsv,
+  generateCorrelationCsv
+} = require('./utils/trendHelpers');
 
-// Authorization middleware
-const authorize = (req, res, next) => {
-  // Check for authorization header
-  const authHeader = req.headers.authorization;
-  
-  if (!authHeader) {
-    return res.status(401).json({ 
-      error: 'Authorization required',
-      code: 'UNAUTHORIZED'
-    });
-  }
-  
-  // In a real application, you would validate the token/credentials here
-  // For now, we'll just check if the header exists
-  // TODO: Implement proper token validation
-  
-  next();
-};
 
 // Configure AWS
 const docClient = new AWS.DynamoDB.DocumentClient();
@@ -30,7 +22,7 @@ const docClient = new AWS.DynamoDB.DocumentClient();
  * Get productivity trends over time
  * Analyzes productivity metrics over specified time periods
  */
-router.get('/productivity', authorize, async (req, res) => {
+router.get('/productivity', async (req, res) => {
   try {
     const { userId, startDate, endDate, interval = 'day' } = req.query;
     
@@ -51,51 +43,48 @@ router.get('/productivity', authorize, async (req, res) => {
       });
     }
     
-    // Set up query parameters
+    // Set up scan parameters
     const params = {
-      TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
-      IndexName: 'DateIndex', // Assuming there's a GSI on the Date field
-      KeyConditionExpression: '#date BETWEEN :startDate AND :endDate',
-      ExpressionAttributeNames: {
-        '#date': 'Date'
-      },
-      ExpressionAttributeValues: {
-        ':startDate': startDate,
-        ':endDate': endDate
-      }
+      TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE
     };
-    
+
+    // Build filter expressions
+    let filterExpressions = [];
+    let expressionAttributeValues = {};
+    let expressionAttributeNames = {};
+
+    // Add date range filter
+    filterExpressions.push('#date BETWEEN :startDate AND :endDate');
+    expressionAttributeNames['#date'] = 'Date';
+    expressionAttributeValues[':startDate'] = startDate;
+    expressionAttributeValues[':endDate'] = endDate;
+
     // Add user filter if provided
     if (userId) {
-      params.FilterExpression = 'UserId = :userId';
-      params.ExpressionAttributeValues[':userId'] = userId;
+      filterExpressions.push('UserId = :userId');
+      expressionAttributeValues[':userId'] = userId;
     }
+
+    // Add filter expressions to params
+    params.FilterExpression = filterExpressions.join(' AND ');
+    params.ExpressionAttributeValues = expressionAttributeValues;
+    params.ExpressionAttributeNames = expressionAttributeNames;
+
+    // Use scan operation
+    const activityData = await docClient.scan(params).promise();
+
+    // Additional client-side date filtering for accuracy
+    let filteredItems = activityData.Items;
+    const startMoment = moment(startDate).startOf('day');
+    const endMoment = moment(endDate).endOf('day');
     
-    // Use query instead of scan for better performance
-    let activityData;
-    try {
-      activityData = await docClient.query(params).promise();
-    } catch (error) {
-      // If DateIndex doesn't exist, fall back to scan with filter
-      if (error.code === 'ValidationException' && error.message.includes('IndexName')) {
-        delete params.IndexName;
-        delete params.KeyConditionExpression;
-        
-        params.FilterExpression = params.FilterExpression 
-          ? `#date BETWEEN :startDate AND :endDate AND ${params.FilterExpression}`
-          : '#date BETWEEN :startDate AND :endDate';
-          
-        activityData = await docClient.scan(params).promise();
-        
-        // Log warning about inefficient operation
-        logger.warn('Using scan operation instead of query. Consider creating a GSI on Date field for better performance.');
-      } else {
-        throw error;
-      }
-    }
+    filteredItems = filteredItems.filter(item => {
+      const itemDate = moment(item.Date);
+      return itemDate.isBetween(startMoment, endMoment, null, '[]');
+    });
     
     // Group data by time interval
-    const groupedData = groupDataByTimeInterval(activityData.Items, interval);
+    const groupedData = groupDataByTimeInterval(filteredItems, interval);
     
     // Calculate trends
     const trends = calculateProductivityTrends(groupedData);
@@ -114,7 +103,7 @@ router.get('/productivity', authorize, async (req, res) => {
  * Get before/after adoption comparison
  * Compares metrics before and after Amazon Q adoption
  */
-router.get('/adoption', authorize, async (req, res) => {
+router.get('/adoption', async (req, res) => {
   try {
     const { userId, daysBeforeAfter = 30 } = req.query;
     
@@ -133,7 +122,10 @@ router.get('/adoption', authorize, async (req, res) => {
       ExpressionAttributeValues: {
         ':userId': userId
       },
-      ProjectionExpression: 'Date'
+      ProjectionExpression: '#date',
+      ExpressionAttributeNames: {
+        '#date': 'Date'
+      }
     };
     
     const adoptionResult = await docClient.scan(adoptionParams).promise();
@@ -155,13 +147,18 @@ router.get('/adoption', authorize, async (req, res) => {
     const beforeStartDate = moment(adoptionDate).subtract(daysBeforeAfter, 'days').format('YYYY-MM-DD');
     const afterEndDate = moment(adoptionDate).add(daysBeforeAfter, 'days').format('YYYY-MM-DD');
     
-    // Get data before adoption
-    const beforeParams = {
+    // Set up scan parameters for before and after data
+    const baseParams = {
       TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
       FilterExpression: 'UserId = :userId AND #date BETWEEN :startDate AND :endDate',
       ExpressionAttributeNames: {
         '#date': 'Date'
-      },
+      }
+    };
+    
+    // Get data before adoption
+    const beforeParams = {
+      ...baseParams,
       ExpressionAttributeValues: {
         ':userId': userId,
         ':startDate': beforeStartDate,
@@ -171,11 +168,7 @@ router.get('/adoption', authorize, async (req, res) => {
     
     // Get data after adoption
     const afterParams = {
-      TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
-      FilterExpression: 'UserId = :userId AND #date BETWEEN :startDate AND :endDate',
-      ExpressionAttributeNames: {
-        '#date': 'Date'
-      },
+      ...baseParams,
       ExpressionAttributeValues: {
         ':userId': userId,
         ':startDate': adoptionDate,
@@ -183,15 +176,31 @@ router.get('/adoption', authorize, async (req, res) => {
       }
     };
     
-    // Execute both queries in parallel for better performance
+    // Execute both scans in parallel for better performance
     const [beforeData, afterData] = await Promise.all([
       docClient.scan(beforeParams).promise(),
       docClient.scan(afterParams).promise()
     ]);
     
+    // Additional client-side date filtering for accuracy
+    const beforeStartMoment = moment(beforeStartDate).startOf('day');
+    const beforeEndMoment = moment(adoptionDate).subtract(1, 'day').endOf('day');
+    const afterStartMoment = moment(adoptionDate).startOf('day');
+    const afterEndMoment = moment(afterEndDate).endOf('day');
+    
+    const filteredBeforeData = beforeData.Items.filter(item => {
+      const itemDate = moment(item.Date);
+      return itemDate.isBetween(beforeStartMoment, beforeEndMoment, null, '[]');
+    });
+    
+    const filteredAfterData = afterData.Items.filter(item => {
+      const itemDate = moment(item.Date);
+      return itemDate.isBetween(afterStartMoment, afterEndMoment, null, '[]');
+    });
+    
     // Calculate metrics for before and after periods
-    const beforeMetrics = calculateAggregateMetrics(beforeData.Items);
-    const afterMetrics = calculateAggregateMetrics(afterData.Items);
+    const beforeMetrics = calculateAggregateMetrics(filteredBeforeData);
+    const afterMetrics = calculateAggregateMetrics(filteredAfterData);
     
     // Calculate percentage changes
     const comparison = calculatePercentageChanges(beforeMetrics, afterMetrics);
@@ -222,7 +231,7 @@ router.get('/adoption', authorize, async (req, res) => {
 /**
  * Get correlation analysis between Amazon Q usage and productivity metrics
  */
-router.get('/correlation', authorize, async (req, res) => {
+router.get('/correlation', async (req, res) => {
   try {
     const { startDate, endDate, metric = 'aiCodeLines' } = req.query;
     
@@ -243,7 +252,7 @@ router.get('/correlation', authorize, async (req, res) => {
       });
     }
     
-    // Set up query parameters
+    // Set up scan parameters
     const params = {
       TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
       FilterExpression: '#date BETWEEN :startDate AND :endDate',
@@ -256,11 +265,20 @@ router.get('/correlation', authorize, async (req, res) => {
       }
     };
     
-    // Use scan operation (consider optimizing with query if possible)
+    // Use scan operation
     const result = await docClient.scan(params).promise();
     
+    // Additional client-side date filtering for accuracy
+    const startMoment = moment(startDate).startOf('day');
+    const endMoment = moment(endDate).endOf('day');
+    
+    const filteredItems = result.Items.filter(item => {
+      const itemDate = moment(item.Date);
+      return itemDate.isBetween(startMoment, endMoment, null, '[]');
+    });
+    
     // Calculate correlation data
-    const correlationData = calculateCorrelation(result.Items, metric);
+    const correlationData = calculateCorrelation(filteredItems, metric);
     
     res.json(correlationData);
   } catch (error) {
@@ -275,7 +293,7 @@ router.get('/correlation', authorize, async (req, res) => {
 /**
  * Export trend data in CSV format
  */
-router.get('/export', authorize, async (req, res) => {
+router.get('/export', async (req, res) => {
   try {
     const { type, userId, startDate, endDate } = req.query;
     
@@ -296,7 +314,7 @@ router.get('/export', authorize, async (req, res) => {
       });
     }
     
-    // Set up query parameters
+    // Set up scan parameters
     const params = {
       TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
       FilterExpression: '#date BETWEEN :startDate AND :endDate',
@@ -318,11 +336,20 @@ router.get('/export', authorize, async (req, res) => {
     // Use scan operation
     const result = await docClient.scan(params).promise();
     
+    // Additional client-side date filtering for accuracy
+    const startMoment = moment(startDate).startOf('day');
+    const endMoment = moment(endDate).endOf('day');
+    
+    const filteredItems = result.Items.filter(item => {
+      const itemDate = moment(item.Date);
+      return itemDate.isBetween(startMoment, endMoment, null, '[]');
+    });
+    
     // Generate CSV data based on type
     let csvData;
     switch (type) {
       case 'productivity':
-        csvData = generateProductivityCsv(result.Items);
+        csvData = generateProductivityCsv(filteredItems);
         break;
       case 'adoption':
         if (!userId) {
@@ -331,10 +358,10 @@ router.get('/export', authorize, async (req, res) => {
             code: 'INVALID_PARAMETERS'
           });
         }
-        csvData = generateAdoptionCsv(result.Items, userId);
+        csvData = generateAdoptionCsv(filteredItems, userId);
         break;
       case 'correlation':
-        csvData = generateCorrelationCsv(result.Items);
+        csvData = generateCorrelationCsv(filteredItems);
         break;
     }
     
@@ -351,3 +378,71 @@ router.get('/export', authorize, async (req, res) => {
     });
   }
 });
+
+/**
+ * Get activity logs with optional filtering
+ */
+router.get('/activity', async (req, res) => {
+  try {
+    const { userId, startDate, endDate } = req.query;
+    
+    // Set up base scan parameters
+    let params = {
+      TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE
+    };
+
+    // Build filter expressions
+    let filterExpressions = [];
+    let expressionAttributeValues = {};
+    let expressionAttributeNames = {};
+
+    // Add date range filter if provided
+    if (startDate && endDate) {
+      filterExpressions.push('#date BETWEEN :startDate AND :endDate');
+      expressionAttributeNames['#date'] = 'Date';
+      expressionAttributeValues[':startDate'] = startDate;
+      expressionAttributeValues[':endDate'] = endDate;
+    }
+
+    // Add user filter if provided
+    if (userId) {
+      filterExpressions.push('UserId = :userId');
+      expressionAttributeValues[':userId'] = userId;
+    }
+
+    // Add filter expressions to params if any exist
+    if (filterExpressions.length > 0) {
+      params.FilterExpression = filterExpressions.join(' AND ');
+      params.ExpressionAttributeValues = expressionAttributeValues;
+      if (Object.keys(expressionAttributeNames).length > 0) {
+        params.ExpressionAttributeNames = expressionAttributeNames;
+      }
+    }
+
+    // Use scan operation
+    const scanResults = await docClient.scan(params).promise();
+
+    // Filter results by date range if provided (additional client-side filtering)
+    let results = scanResults.Items;
+    if (startDate && endDate) {
+      const startMoment = moment(startDate).startOf('day');
+      const endMoment = moment(endDate).endOf('day');
+      
+      results = results.filter(item => {
+        const itemDate = moment(item.Date);
+        return itemDate.isBetween(startMoment, endMoment, null, '[]');
+      });
+    }
+
+    res.json(results);
+  } catch (error) {
+    logger.error('Error fetching activity logs:', { error: error.message, stack: error.stack });
+    res.status(500).json({ 
+      error: 'Failed to fetch activity logs',
+      code: 'INTERNAL_SERVER_ERROR'
+    });
+  }
+});
+
+// Export the router
+module.exports = router;

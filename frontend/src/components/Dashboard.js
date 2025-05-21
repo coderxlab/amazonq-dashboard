@@ -36,6 +36,14 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('summary');
+  
+  // Define tabs for navigation
+  const tabs = [
+    { id: 'summary', label: 'Summary Dashboard' },
+    { id: 'productivity', label: 'Productivity Trends' },
+    { id: 'adoption', label: 'Adoption Comparison' },
+    { id: 'correlation', label: 'Correlation Analysis' }
+  ];
 
   useEffect(() => {
     const fetchData = async () => {
@@ -130,6 +138,28 @@ const Dashboard = () => {
       
       <FilterControls onFilterChange={setFilters} />
       
+      {/* Tab Navigation */}
+      <div className="mb-6">
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`
+                  py-4 px-1 border-b-2 font-medium text-sm
+                  ${activeTab === tab.id
+                    ? 'border-amazon-teal text-amazon-teal'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
+                `}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+      </div>
+      
       {loading && (
         <div className="flex justify-center items-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amazon-teal"></div>
@@ -142,122 +172,142 @@ const Dashboard = () => {
         </div>
       )}
       
-      {!loading && !error && summaryData && (
+      {!loading && !error && (
         <>
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <SummaryCard 
-              title="Total AI Code Lines" 
-              value={summaryData.totalAICodeLines} 
-              icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-              </svg>}
-              color="bg-amazon-teal text-white"
-            />
-            <SummaryCard 
-              title="Acceptance Rate" 
-              value={`${summaryData.acceptanceRate.toFixed(1)}%`} 
-              icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>}
-              color="bg-green-500 text-white"
-            />
-            <SummaryCard 
-              title="Chat Interactions" 
-              value={summaryData.totalChatInteractions} 
-              icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-              </svg>}
-              color="bg-amazon-orange text-white"
-            />
-            <SummaryCard 
-              title="Inline Suggestions" 
-              value={summaryData.totalInlineSuggestions} 
-              icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>}
-              color="bg-purple-500 text-white"
-            />
-          </div>
-          
-          {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <div className="bg-white p-4 rounded-lg shadow">
-              <h2 className="text-lg font-semibold mb-4">AI Code Lines per Developer</h2>
-              <div className="h-80">
-                {barChartData ? (
-                  <Bar data={barChartData} options={chartOptions} />
-                ) : (
-                  <div className="flex justify-center items-center h-full text-gray-500">
-                    No data available
-                  </div>
-                )}
+          {/* Summary Dashboard Tab */}
+          {activeTab === 'summary' && summaryData && (
+            <>
+              {/* Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <SummaryCard 
+                  title="Total AI Code Lines" 
+                  value={summaryData.totalAICodeLines} 
+                  icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                  </svg>}
+                  color="bg-amazon-teal text-white"
+                />
+                <SummaryCard 
+                  title="Acceptance Rate" 
+                  value={`${summaryData.acceptanceRate.toFixed(1)}%`} 
+                  icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>}
+                  color="bg-green-500 text-white"
+                />
+                <SummaryCard 
+                  title="Chat Interactions" 
+                  value={summaryData.totalChatInteractions} 
+                  icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                  </svg>}
+                  color="bg-amazon-orange text-white"
+                />
+                <SummaryCard 
+                  title="Inline Suggestions" 
+                  value={summaryData.totalInlineSuggestions} 
+                  icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>}
+                  color="bg-purple-500 text-white"
+                />
               </div>
-            </div>
-            <div className="bg-white p-4 rounded-lg shadow">
-              <h2 className="text-lg font-semibold mb-4">AI Code Lines over Time</h2>
-              <div className="h-80">
-                {lineChartData ? (
-                  <Line data={lineChartData} options={chartOptions} />
-                ) : (
-                  <div className="flex justify-center items-center h-full text-gray-500">
-                    No data available
+              
+              {/* Charts */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <div className="bg-white p-4 rounded-lg shadow">
+                  <h2 className="text-lg font-semibold mb-4">AI Code Lines per Developer</h2>
+                  <div className="h-80">
+                    {barChartData ? (
+                      <Bar data={barChartData} options={chartOptions} />
+                    ) : (
+                      <div className="flex justify-center items-center h-full text-gray-500">
+                        No data available
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
+                <div className="bg-white p-4 rounded-lg shadow">
+                  <h2 className="text-lg font-semibold mb-4">AI Code Lines over Time</h2>
+                  <div className="h-80">
+                    {lineChartData ? (
+                      <Line data={lineChartData} options={chartOptions} />
+                    ) : (
+                      <div className="flex justify-center items-center h-full text-gray-500">
+                        No data available
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+              
+              {/* User Activity Table */}
+              <div className="bg-white p-4 rounded-lg shadow">
+                <h2 className="text-lg font-semibold mb-4">Developer Activity Summary</h2>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          User ID
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          AI Code Lines
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Suggestions
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Acceptance %
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Chat Interactions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {summaryData.byUser.map((user) => (
+                        <tr key={user.userId}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {user.userId.substring(user.userId.length - 8)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {user.aiCodeLines}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {user.inlineSuggestions}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {user.inlineSuggestions > 0
+                              ? ((user.inlineAcceptances / user.inlineSuggestions) * 100).toFixed(1) + '%'
+                              : 'N/A'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {user.chatInteractions}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
           
-          {/* User Activity Table */}
-          <div className="bg-white p-4 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">Developer Activity Summary</h2>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      User ID
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      AI Code Lines
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Suggestions
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Acceptance %
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Chat Interactions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {summaryData.byUser.map((user) => (
-                    <tr key={user.userId}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {user.userId.substring(user.userId.length - 8)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {user.aiCodeLines}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {user.inlineSuggestions}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {user.inlineSuggestions > 0
-                          ? ((user.inlineAcceptances / user.inlineSuggestions) * 100).toFixed(1) + '%'
-                          : 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {user.chatInteractions}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          {/* Productivity Trends Tab */}
+          {activeTab === 'productivity' && (
+            <ProductivityTrends filters={filters} />
+          )}
+          
+          {/* Adoption Comparison Tab */}
+          {activeTab === 'adoption' && (
+            <AdoptionComparison filters={filters} />
+          )}
+          
+          {/* Correlation Analysis Tab */}
+          {activeTab === 'correlation' && (
+            <CorrelationAnalysis filters={filters} />
+          )}
         </>
       )}
     </div>
