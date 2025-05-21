@@ -13,7 +13,9 @@ import {
 } from 'chart.js';
 import FilterControls from './FilterControls';
 import SummaryCard from './SummaryCard';
-import { getActivitySummary } from '../services/api';
+import ComparisonChart from './ComparisonChart';
+import { getActivitySummary, getComparativeMetrics } from '../services/api';
+import moment from 'moment';
 
 // Register ChartJS components
 ChartJS.register(
@@ -27,11 +29,14 @@ ChartJS.register(
   Legend
 );
 
-const Dashboard = () => {
+const Dashboard = ({users, loadingUsers}) => {
   const [summaryData, setSummaryData] = useState(null);
+  const [comparisonData, setComparisonData] = useState(null);
   const [filters, setFilters] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [startDate, setStartDate] = useState(null);
+  const [endDate, setEndDate] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -40,6 +45,37 @@ const Dashboard = () => {
       try {
         const data = await getActivitySummary(filters);
         setSummaryData(data);
+
+        // Fetch comparative data for the previous period
+        const { startDate, endDate, userId } = filters;
+        let tempUserIds = userId
+        if (!userId) tempUserIds = users.join(", ")
+
+        let tempStartDate = startDate
+        let tempEndDate = endDate
+        if (!startDate || !endDate) {
+          tempEndDate = moment().format('YYYY-MM-DD');
+          tempStartDate = moment().subtract(1, 'week').format('YYYY-MM-DD');
+        }
+
+        setStartDate(tempStartDate)
+        setEndDate(tempEndDate)
+
+        const start = moment(tempStartDate);
+        const end = moment(tempEndDate);
+        const duration = moment.duration(end.diff(start));
+        const compareStartDate = start.clone().subtract(duration).format('YYYY-MM-DD');
+        const compareEndDate = start.clone().subtract(1, 'day').format('YYYY-MM-DD');
+
+        const compareData = await getComparativeMetrics({
+          userIds: tempUserIds,
+          startDate: tempStartDate,
+          endDate: tempEndDate,
+          compareStartDate,
+          compareEndDate
+        });
+        setComparisonData(compareData);
+        
       } catch (err) {
         setError('Failed to fetch dashboard data');
         console.error(err);
@@ -49,7 +85,7 @@ const Dashboard = () => {
     };
 
     fetchData();
-  }, [filters]);
+  }, [filters, users]);
 
   // Prepare chart data for AI Code Lines per Developer
   const prepareBarChartData = () => {
@@ -124,7 +160,7 @@ const Dashboard = () => {
     <div>
       <h1 className="text-2xl font-bold mb-6">Developer Productivity Dashboard</h1>
       
-      <FilterControls onFilterChange={setFilters} />
+      <FilterControls onFilterChange={setFilters} users={users} loading={loadingUsers}/>
       
       {loading && (
         <div className="flex justify-center items-center h-64">
@@ -203,6 +239,35 @@ const Dashboard = () => {
               </div>
             </div>
           </div>
+
+          {/* Comparative Metrics */}
+          {comparisonData && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              <ComparisonChart
+                currentData={comparisonData.current}
+                previousData={comparisonData.previous}
+                title="AI Code Lines Comparison"
+                metric="aiCodeLines"
+                currentDateRange={{ start: startDate, end: endDate }}
+                previousDateRange={{ 
+                  start: moment(startDate).subtract(moment(endDate).diff(moment(startDate))).format('YYYY-MM-DD'),
+                  end: moment(startDate).subtract(1, 'day').format('YYYY-MM-DD')
+                }}
+              />
+              <ComparisonChart
+                currentData={comparisonData.current}
+                previousData={comparisonData.previous}
+                title="Chat Interactions Comparison"
+                metric="chatInteractions"
+                currentDateRange={{ start: startDate, end: endDate }}
+                previousDateRange={{ 
+                  start: moment(startDate).subtract(moment(endDate).diff(moment(startDate))).format('YYYY-MM-DD'),
+                  end: moment(startDate).subtract(1, 'day').format('YYYY-MM-DD')
+                }}
+              />
+            </div>
+          )}
+          
           
           {/* User Activity Table */}
           <div className="bg-white p-4 rounded-lg shadow">
