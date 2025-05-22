@@ -25,7 +25,6 @@ AWS.config.update({
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
 });
 
-const dynamodb = new AWS.DynamoDB();
 const docClient = new AWS.DynamoDB.DocumentClient();
 
 // Routes
@@ -56,6 +55,8 @@ app.get('/api/users', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
+
+
 
 
 
@@ -124,9 +125,22 @@ app.get('/api/activity/summary', async (req, res) => {
       totalInlineAcceptances: 0,
       acceptanceRate: 0,
       byUser: {},
-      byDate: {}
+      byDate: {},
+      // New data structures for enhanced visualizations
+      byDayOfWeek: Array(7).fill().map(() => ({ 
+        suggestions: 0, 
+        acceptances: 0, 
+        rate: 0 
+      })),
+      trendAnalysis: {
+        daily: [],
+        weekly: [],
+        monthly: []
+      },
+      suggestionsVsAcceptances: []
     };
     
+    // Process each item for summary metrics
     results.forEach(item => {
       // Parse numeric values (handling potential undefined values)
       const chatAICodeLines = parseInt(item.Chat_AICodeLines || 0);
@@ -172,12 +186,134 @@ app.get('/api/activity/summary', async (req, res) => {
       summary.byDate[item.Date].chatInteractions += chatMessagesInteracted;
       summary.byDate[item.Date].inlineSuggestions += inlineSuggestionsCount;
       summary.byDate[item.Date].inlineAcceptances += inlineAcceptanceCount;
+      
+      // Extract time information for heatmap
+      let itemDateTime;
+      
+      // Handle different timestamp formats
+      if (item.TimeStamp) {
+        itemDateTime = moment(item.TimeStamp);
+      } else if (item.Timestamp) {
+        itemDateTime = moment(item.Timestamp);
+      } else if (item.timestamp) {
+        itemDateTime = moment(item.timestamp);
+      } else {
+        // If no timestamp, try to use date with a default time
+        if (typeof item.Date === 'string') {
+          itemDateTime = moment(item.Date);
+        } else if (item.Date && item.Date.S) {
+          itemDateTime = moment(item.Date.S);
+        } else {
+          // Skip this item for time-based aggregation
+          return;
+        }
+      }
+      
+      // Aggregate by day of week (0-6, where 0 is Sunday)
+      const dayOfWeek = itemDateTime.day();
+      summary.byDayOfWeek[dayOfWeek].suggestions += inlineSuggestionsCount;
+      summary.byDayOfWeek[dayOfWeek].acceptances += inlineAcceptanceCount;
+      
+      // Add to suggestions vs acceptances time series
+      summary.suggestionsVsAcceptances.push({
+        date: item.Date,
+        suggestions: inlineSuggestionsCount,
+        acceptances: inlineAcceptanceCount,
+        timestamp: itemDateTime.valueOf() // For sorting
+      });
     });
     
-    // Calculate acceptance rate
+    // Calculate acceptance rates for day of week
+    summary.byDayOfWeek = summary.byDayOfWeek.map((day, index) => ({
+      day: index,
+      dayName: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][index],
+      suggestions: day.suggestions,
+      acceptances: day.acceptances,
+      rate: day.suggestions > 0 ? (day.acceptances / day.suggestions) * 100 : 0
+    }));
+    
+    // Sort suggestions vs acceptances by date
+    summary.suggestionsVsAcceptances.sort((a, b) => a.timestamp - b.timestamp);
+    
+    // Calculate overall acceptance rate
     if (summary.totalInlineSuggestions > 0) {
       summary.acceptanceRate = (summary.totalInlineAcceptances / summary.totalInlineSuggestions) * 100;
     }
+    
+    // Generate trend analysis
+    // Convert byDate to array and sort by date
+    const dateArray = Object.values(summary.byDate).sort((a, b) => moment(a.date).diff(moment(b.date)));
+    
+    // Calculate daily trend (7-day moving average)
+    const dailyWindow = 7;
+    for (let i = 0; i < dateArray.length; i++) {
+      const windowStart = Math.max(0, i - dailyWindow + 1);
+      const windowEnd = i + 1;
+      const windowData = dateArray.slice(windowStart, windowEnd);
+      
+      const totalSuggestions = windowData.reduce((sum, item) => sum + item.inlineSuggestions, 0);
+      const totalAcceptances = windowData.reduce((sum, item) => sum + item.inlineAcceptances, 0);
+      
+      const trendPoint = {
+        date: dateArray[i].date,
+        acceptanceRate: totalSuggestions > 0 ? (totalAcceptances / totalSuggestions) * 100 : 0,
+        movingAverageDays: Math.min(i + 1, dailyWindow)
+      };
+      
+      summary.trendAnalysis.daily.push(trendPoint);
+    }
+    
+    // Calculate weekly trend
+    const weeklyData = {};
+    dateArray.forEach(item => {
+      const weekNumber = moment(item.date).week();
+      const year = moment(item.date).year();
+      const weekKey = `${year}-W${weekNumber}`;
+      
+      if (!weeklyData[weekKey]) {
+        weeklyData[weekKey] = {
+          weekKey,
+          date: item.date, // Use the first date of this week
+          suggestions: 0,
+          acceptances: 0
+        };
+      }
+      
+      weeklyData[weekKey].suggestions += item.inlineSuggestions;
+      weeklyData[weekKey].acceptances += item.inlineAcceptances;
+    });
+    
+    // Convert weekly data to array and calculate rates
+    summary.trendAnalysis.weekly = Object.values(weeklyData).map(week => ({
+      weekKey: week.weekKey,
+      date: week.date,
+      acceptanceRate: week.suggestions > 0 ? (week.acceptances / week.suggestions) * 100 : 0
+    })).sort((a, b) => moment(a.date).diff(moment(b.date)));
+    
+    // Calculate monthly trend
+    const monthlyData = {};
+    dateArray.forEach(item => {
+      const monthKey = moment(item.date).format('YYYY-MM');
+      
+      if (!monthlyData[monthKey]) {
+        monthlyData[monthKey] = {
+          monthKey,
+          date: item.date, // Use the first date of this month
+          suggestions: 0,
+          acceptances: 0
+        };
+      }
+      
+      monthlyData[monthKey].suggestions += item.inlineSuggestions;
+      monthlyData[monthKey].acceptances += item.inlineAcceptances;
+    });
+    
+    // Convert monthly data to array and calculate rates
+    summary.trendAnalysis.monthly = Object.values(monthlyData).map(month => ({
+      monthKey: month.monthKey,
+      date: month.date,
+      acceptanceRate: month.suggestions > 0 ? (month.acceptances / month.suggestions) * 100 : 0
+    })).sort((a, b) => moment(a.date).diff(moment(b.date)));
     
     // Convert byUser and byDate objects to arrays for easier frontend processing
     summary.byUser = Object.values(summary.byUser);
@@ -187,6 +323,132 @@ app.get('/api/activity/summary', async (req, res) => {
   } catch (error) {
     console.error('Error fetching activity summary:', error);
     res.status(500).json({ error: 'Failed to fetch activity summary' });
+  }
+});
+
+// Get comparative metrics between two periods
+app.get('/api/activity/compare', async (req, res) => {
+  try {
+    let { startDate, endDate, compareStartDate, compareEndDate, userIds } = req.query;
+    
+    // Set default date ranges if not provided (last 1 week)
+    if (!startDate || !endDate) {
+      endDate = moment().format('YYYY-MM-DD');
+      startDate = moment().subtract(1, 'week').format('YYYY-MM-DD');
+    } else {
+      // Validate date formats for primary date range
+      if (!moment(startDate, 'YYYY-MM-DD', true).isValid()) {
+        return res.status(400).json({ error: 'Invalid startDate format. Use YYYY-MM-DD' });
+      }
+      if (!moment(endDate, 'YYYY-MM-DD', true).isValid()) {
+        return res.status(400).json({ error: 'Invalid endDate format. Use YYYY-MM-DD' });
+      }
+      
+      // Validate date range logic
+      if (moment(endDate).isBefore(startDate)) {
+        return res.status(400).json({ error: 'endDate cannot be before startDate' });
+      }
+    }
+
+    if (!compareStartDate || !compareEndDate) {
+      compareEndDate = moment(startDate).subtract(1, 'day').format('YYYY-MM-DD');
+      compareStartDate = moment(compareEndDate).subtract(1, 'week').format('YYYY-MM-DD');
+    } else {
+      // Validate date formats for comparison date range
+      if (!moment(compareStartDate, 'YYYY-MM-DD', true).isValid()) {
+        return res.status(400).json({ error: 'Invalid compareStartDate format. Use YYYY-MM-DD' });
+      }
+      if (!moment(compareEndDate, 'YYYY-MM-DD', true).isValid()) {
+        return res.status(400).json({ error: 'Invalid compareEndDate format. Use YYYY-MM-DD' });
+      }
+      
+      // Validate comparison date range logic
+      if (moment(compareEndDate).isBefore(compareStartDate)) {
+        return res.status(400).json({ error: 'compareEndDate cannot be before compareStartDate' });
+      }
+    }
+
+    // Function to get metrics for a specific date range using Query operation
+    const getMetricsForPeriod = async (start, end, userFilter) => {
+      const metrics = {
+        aiCodeLines: 0,
+        chatInteractions: 0,
+        inlineSuggestions: 0,
+        inlineAcceptances: 0
+      };
+
+      const startDateFormatted = moment(start).startOf('day').format('YYYY-MM-DD');
+      const endDateFormatted = moment(end).endOf('day').format('YYYY-MM-DD');
+
+      // If no userFilter provided, get all users first
+      let userIdList = [];
+      if (!userFilter) {
+        const usersParams = {
+          TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
+          ProjectionExpression: 'UserId'
+        };
+        const userScan = await docClient.scan(usersParams).promise();
+        userIdList = [...new Set(userScan.Items.map(item => item.UserId))];
+      } else {
+        userIdList = userFilter.split(',');
+      }
+
+      // Query each user's data in parallel
+      const userQueries = userIdList.map(async userId => {
+        const params = {
+          TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
+          KeyConditionExpression: 'UserId = :userId AND #date BETWEEN :startDate AND :endDate',
+          ExpressionAttributeNames: {
+            '#date': 'Date'
+          },
+          ExpressionAttributeValues: {
+            ':userId': userId.trim(),
+            ':startDate': startDateFormatted,
+            ':endDate': endDateFormatted
+          }
+        };
+
+        const queryResults = await docClient.query(params).promise();
+        
+        // Aggregate metrics from query results
+        return queryResults.Items.reduce((acc, item) => {
+          acc.aiCodeLines += parseInt(item.Chat_AICodeLines || 0) + parseInt(item.Inline_AICodeLines || 0);
+          acc.chatInteractions += parseInt(item.Chat_MessagesInteracted || 0);
+          acc.inlineSuggestions += parseInt(item.Inline_SuggestionsCount || 0);
+          acc.inlineAcceptances += parseInt(item.Inline_AcceptanceCount || 0);
+          return acc;
+        }, {
+          aiCodeLines: 0,
+          chatInteractions: 0,
+          inlineSuggestions: 0,
+          inlineAcceptances: 0
+        });
+      });
+
+      // Wait for all user queries to complete and combine results
+      const userResults = await Promise.all(userQueries);
+      return userResults.reduce((total, userMetrics) => {
+        total.aiCodeLines += userMetrics.aiCodeLines;
+        total.chatInteractions += userMetrics.chatInteractions;
+        total.inlineSuggestions += userMetrics.inlineSuggestions;
+        total.inlineAcceptances += userMetrics.inlineAcceptances;
+        return total;
+      }, metrics);
+    };
+    
+    // Get metrics for both periods
+    const [currentMetrics, previousMetrics] = await Promise.all([
+      getMetricsForPeriod(startDate, endDate, userIds),
+      getMetricsForPeriod(compareStartDate, compareEndDate, userIds)
+    ]);
+    
+    res.json({
+      current: currentMetrics,
+      previous: previousMetrics
+    });
+  } catch (error) {
+    console.error('Error fetching comparative metrics:', error);
+    res.status(500).json({ error: 'Failed to fetch comparative metrics' });
   }
 });
 
@@ -308,6 +570,10 @@ app.get('/api/prompts', async (req, res) => {
 });
 
 // Start server
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+  });
+}
+
+module.exports = app;
