@@ -44,7 +44,13 @@ const setupPromptEndpoints = (app, docClient) => {
         }
       }
       
+}
+      }
+      
+      // TODO: Implement pagination for scan operation
       const scanResults = await docClient.scan(params).promise();
+      
+      // Filter by date range if provided
       
       // Filter by date range if provided
       let results = scanResults.Items;
