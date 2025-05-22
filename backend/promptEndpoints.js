@@ -125,7 +125,13 @@ if (params.ExpressionAttributeNames && Object.keys(params.ExpressionAttributeNam
           }
           // Fallback to current time (should not happen)
           else {
-            console.warn('Item has no valid timestamp:', item);
+}
+          // Fallback to current time (should not happen)
+          else {
+            // import DOMPurify from 'dompurify'; // Sanitize user input before logging
+            console.warn('Item has no valid timestamp:', DOMPurify.sanitize(JSON.stringify(item)));
+            return false;
+          }
             return false;
           }
           
