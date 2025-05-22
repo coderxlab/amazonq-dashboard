@@ -143,7 +143,13 @@ if (params.ExpressionAttributeNames && Object.keys(params.ExpressionAttributeNam
           
           const isInRange = itemTimestamp.isBetween(startMoment, endMoment, null, '[]');
           if (isInRange) {
-            console.log(`Item in range: ${itemTimestamp.format()}`);
+const isInRange = itemTimestamp.isBetween(startMoment, endMoment, null, '[]');
+          if (isInRange) {
+            // Use encodeURIComponent to sanitize user input before logging
+            console.log(`Item in range: ${encodeURIComponent(itemTimestamp.format())}`); // import encodeURIComponent
+          }
+          return isInRange;
+        });
           }
           return isInRange;
         });
