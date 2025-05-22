@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
-const FilterControls = ({ onFilterChange, users, loading }) => {
+const FilterControls = ({ onFilterChange, users = [], loading }) => {
 
   const [selectedUser, setSelectedUser] = useState('');
   const [startDate, setStartDate] = useState(null);
@@ -40,7 +40,7 @@ const FilterControls = ({ onFilterChange, users, loading }) => {
             disabled={loading}
           >
             <option value="">All Users</option>
-            {users.map((user) => (
+            {Array.isArray(users) && users.map((user) => (
               <option key={user} value={user}>
                 {user.substring(user.length - 8)} {/* Show last 8 chars of user ID */}
               </option>
@@ -94,4 +94,3 @@ const FilterControls = ({ onFilterChange, users, loading }) => {
 };
 
 export default FilterControls;
-

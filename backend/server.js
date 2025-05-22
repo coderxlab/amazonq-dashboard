@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const AWS = require('aws-sdk');
 const moment = require('moment');
+const trendsRoutes = require('./trends');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -31,6 +32,9 @@ app.get('/', (req, res) => {
   res.send('Amazon Q Developer Productivity Dashboard API');
 });
 
+// Mount trends routes
+app.use('/api/trends', trendsRoutes);
+
 // Get all users
 app.get('/api/users', async (req, res) => {
   try {
@@ -52,69 +56,7 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-// Get activity logs with optional filtering
-app.get('/api/activity', async (req, res) => {
-  try {
-    const { userId, startDate, endDate } = req.query;
-    
-    let params = {
-      TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE
-    };
-    
-    // Add filters if provided
-    if (userId) {
-      params.FilterExpression = 'UserId = :userId';
-      params.ExpressionAttributeValues = {
-        ':userId': userId
-      };
-    }
-    
-    const scanResults = await docClient.scan(params).promise();
-    
-    // Filter by date range if provided
-    let results = scanResults.Items;
-    if (startDate && endDate) {
-      const startMoment = moment(startDate).startOf('day');
-      const endMoment = moment(endDate).endOf('day');
-      
-      results = results.filter(item => {
-        // Handle different date formats
-        let itemDate;
-        
-        // If Date is a string
-        if (typeof item.Date === 'string') {
-          // Try different date formats
-          if (item.Date.includes('-')) {
-            // Format: YYYY-MM-DD
-            itemDate = moment(item.Date);
-          } else if (item.Date.includes('/')) {
-            // Format: MM/DD/YYYY
-            itemDate = moment(item.Date, 'MM/DD/YYYY');
-          } else {
-            // Format: MM-DD-YYYY
-            itemDate = moment(item.Date, 'MM-DD-YYYY');
-          }
-        } 
-        // If Date is in DynamoDB format with S attribute
-        else if (item.Date && item.Date.S) {
-          itemDate = moment(item.Date.S);
-        }
-        // Fallback to current date (should not happen)
-        else {
-          console.warn('Item has no valid date:', item);
-          return false;
-        }
-        
-        return itemDate.isBetween(startMoment, endMoment, null, '[]');
-      });
-    }
-    
-    res.json(results);
-  } catch (error) {
-    console.error('Error fetching activity logs:', error);
-    res.status(500).json({ error: 'Failed to fetch activity logs' });
-  }
-});
+
 
 
 

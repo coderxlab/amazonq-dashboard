@@ -14,6 +14,9 @@ import {
 } from 'chart.js';
 import FilterControls from './FilterControls';
 import SummaryCard from './SummaryCard';
+import ProductivityTrends from './ProductivityTrends';
+import AdoptionComparison from './AdoptionComparison';
+import CorrelationAnalysis from './CorrelationAnalysis';
 import ComparisonChart from './ComparisonChart';
 import { getActivitySummary, getComparativeMetrics } from '../services/api';
 import moment from 'moment';
@@ -40,6 +43,13 @@ const Dashboard = ({users, loadingUsers}) => {
   const [activeVisualization, setActiveVisualization] = useState('comparison'); // Default visualization
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
+  const [activeTab, setActiveTab] = useState('summary');
+  
+  // Define tabs for navigation
+  const tabs = [
+    { id: 'summary', label: 'Summary Dashboard' },
+    { id: 'productivity', label: 'Productivity Trends' }
+  ];
 
   useEffect(() => {
     const fetchData = async () => {
@@ -342,7 +352,29 @@ const Dashboard = ({users, loadingUsers}) => {
     <div>
       <h1 className="text-2xl font-bold mb-6">Developer Productivity Dashboard</h1>
       
-      <FilterControls onFilterChange={setFilters} users={users} loading={loadingUsers}/>
+      <FilterControls onFilterChange={setFilters} users={users} loadingUsers={loadingUsers} />
+      
+      {/* Tab Navigation */}
+      <div className="mb-6">
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`
+                  py-4 px-1 border-b-2 font-medium text-sm
+                  ${activeTab === tab.id
+                    ? 'border-amazon-teal text-amazon-teal'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
+                `}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+      </div>
       
       {loading && (
         <div className="flex justify-center items-center h-64">
@@ -356,7 +388,7 @@ const Dashboard = ({users, loadingUsers}) => {
         </div>
       )}
       
-      {!loading && !error && summaryData && (
+      {!loading && !error && activeTab === 'summary' && summaryData && (
         <>
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -392,6 +424,34 @@ const Dashboard = ({users, loadingUsers}) => {
               </svg>}
               color="bg-purple-500 text-white"
             />
+          </div>
+
+          {/* Original Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div className="bg-white p-4 rounded-lg shadow">
+              <h2 className="text-lg font-semibold mb-4">AI Code Lines per Developer</h2>
+              <div className="h-80">
+                {prepareBarChartData ? (
+                  <Bar data={prepareBarChartData} options={chartOptions} />
+                ) : (
+                  <div className="flex justify-center items-center h-full text-gray-500">
+                    No data available
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow">
+              <h2 className="text-lg font-semibold mb-4">AI Code Lines over Time</h2>
+              <div className="h-80">
+                {prepareLineChartData ? (
+                  <Line data={prepareLineChartData} options={chartOptions} />
+                ) : (
+                  <div className="flex justify-center items-center h-full text-gray-500">
+                    No data available
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
           
           {/* Enhanced Acceptance Visualizations */}
@@ -457,33 +517,7 @@ const Dashboard = ({users, loadingUsers}) => {
             </div>
           </div>
           
-          {/* Original Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <div className="bg-white p-4 rounded-lg shadow">
-              <h2 className="text-lg font-semibold mb-4">AI Code Lines per Developer</h2>
-              <div className="h-80">
-                {prepareBarChartData ? (
-                  <Bar data={prepareBarChartData} options={chartOptions} />
-                ) : (
-                  <div className="flex justify-center items-center h-full text-gray-500">
-                    No data available
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="bg-white p-4 rounded-lg shadow">
-              <h2 className="text-lg font-semibold mb-4">AI Code Lines over Time</h2>
-              <div className="h-80">
-                {prepareLineChartData ? (
-                  <Line data={prepareLineChartData} options={chartOptions} />
-                ) : (
-                  <div className="flex justify-center items-center h-full text-gray-500">
-                    No data available
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+
 
           {/* Comparative Metrics */}
           {comparisonData && (
@@ -565,6 +599,16 @@ const Dashboard = ({users, loadingUsers}) => {
             </div>
           </div>
         </>
+      )}
+
+      {/* Productivity Trends Tab */}
+      {!loading && !error && activeTab === 'productivity' && (
+        <ProductivityTrends filters={filters} />
+      )}
+      
+      {/* Correlation Analysis Tab */}
+      {!loading && !error && activeTab === 'correlation' && (
+        <CorrelationAnalysis filters={filters} />
       )}
     </div>
   );
