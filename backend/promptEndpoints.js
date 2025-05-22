@@ -52,7 +52,60 @@ const setupPromptEndpoints = (app, docClient) => {
         const startMoment = moment(startDate).startOf('day');
         const endMoment = moment(endDate).endOf('day');
         
-        console.log(`Filtering logs between ${startMoment.format()} and ${endMoment.format()}`);
+if (params.ExpressionAttributeNames && Object.keys(params.ExpressionAttributeNames).length === 0) {
+          delete params.ExpressionAttributeNames;
+        }
+      }
+      
+      const scanResults = await docClient.scan(params).promise();
+      
+      // Filter by date range if provided
+      let results = scanResults.Items;
+      if (startDate && endDate) {
+        const startMoment = moment(startDate).startOf('day');
+        const endMoment = moment(endDate).endOf('day');
+        
+        // Use a template literal with sanitized input
+        console.log(`Filtering logs between ${encodeURIComponent(startMoment.format())} and ${encodeURIComponent(endMoment.format())}`);
+        
+        results = results.filter(item => {
+          // Handle different timestamp formats
+          let itemTimestamp;
+          
+          // If TimeStamp is a string (ISO format)
+          if (typeof item.TimeStamp === 'string') {
+            itemTimestamp = moment(item.TimeStamp);
+          } 
+          // If TimeStamp is in DynamoDB format with S attribute
+          else if (item.TimeStamp && item.TimeStamp.S) {
+            itemTimestamp = moment(item.TimeStamp.S);
+          }
+          // If timestamp is in a different field
+          else if (item.timeStamp) {
+            itemTimestamp = moment(item.timeStamp);
+          }
+          // Fallback to current time (should not happen)
+          else {
+            console.warn('Item has no valid timestamp:', item);
+            return false;
+          }
+          
+          const isInRange = itemTimestamp.isBetween(startMoment, endMoment, null, '[]');
+          if (isInRange) {
+            console.log(`Item in range: ${encodeURIComponent(itemTimestamp.format())}`);
+          }
+          return isInRange;
+        });
+        
+        console.log(`Filtered to ${results.length} items`);
+      }
+      
+      // Filter out empty records if includeEmpty is false
+      // This is done after fetching results since we need to use trim() which isn't available in DynamoDB expressions
+      if (includeEmpty !== 'true') {
+        results = results.filter(item => {
+          return item.Prompt && item.Response && 
+                 item.Prompt.trim() !== '' &&
         
         results = results.filter(item => {
           // Handle different timestamp formats
