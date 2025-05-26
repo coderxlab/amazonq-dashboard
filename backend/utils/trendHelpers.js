@@ -95,38 +95,63 @@ function calculateProductivityTrends(groupedData) {
   // Calculate moving averages window size (7 days or length of data if smaller)
   const windowSize = Math.min(7, sortedData.length);
 
+  // Pre-calculate acceptance rates for all points to avoid redundant calculations
+  const acceptanceRates = sortedData.map(point => 
+    point.inlineSuggestions > 0 ? (point.inlineAcceptances / point.inlineSuggestions) * 100 : 0
+  );
+
   sortedData.forEach((point, index) => {
+    const acceptanceRate = acceptanceRates[index];
+    
+    // Add time point
     trends.timePoints.push(point.date);
     
-    // Base metrics
+    // Add base metrics in one step
     trends.metrics.aiCodeLines.push(point.aiCodeLines);
     trends.metrics.chatInteractions.push(point.chatInteractions);
     trends.metrics.inlineSuggestions.push(point.inlineSuggestions);
     trends.metrics.inlineAcceptances.push(point.inlineAcceptances);
-    const acceptanceRate = point.inlineSuggestions > 0 ? (point.inlineAcceptances / point.inlineSuggestions) * 100 : 0;
     trends.metrics.acceptanceRate.push(acceptanceRate);
 
-    // Moving averages - use all available points up to the window size
-    const window = sortedData.slice(Math.max(0, index - windowSize + 1), index + 1);
-    trends.movingAverages.aiCodeLines.push(
-      window.reduce((sum, p) => sum + p.aiCodeLines, 0) / window.length
-    );
-    trends.movingAverages.chatInteractions.push(
-      window.reduce((sum, p) => sum + p.chatInteractions, 0) / window.length
-    );
-    trends.movingAverages.inlineSuggestions.push(
-      window.reduce((sum, p) => sum + p.inlineSuggestions, 0) / window.length
-    );
-    trends.movingAverages.inlineAcceptances.push(
-      window.reduce((sum, p) => sum + p.inlineAcceptances, 0) / window.length
-    );
-    trends.movingAverages.acceptanceRate.push(
-      window.reduce((sum, p) => sum + (p.inlineSuggestions > 0 ? (p.inlineAcceptances / p.inlineSuggestions) * 100 : 0), 0) / window.length
-    );
+    // Update totals in the same loop
+    trends.totals.aiCodeLines += point.aiCodeLines;
+    trends.totals.chatInteractions += point.chatInteractions;
+    trends.totals.inlineSuggestions += point.inlineSuggestions;
+    trends.totals.inlineAcceptances += point.inlineAcceptances;
 
-    // Growth rates (percentage change from previous period)
+    // Calculate moving averages efficiently
+    const windowStartIndex = Math.max(0, index - windowSize + 1);
+    const windowPoints = sortedData.slice(windowStartIndex, index + 1);
+    
+    // Calculate sums for moving averages in one pass
+    const windowSums = windowPoints.reduce((sums, p, i) => {
+      sums.aiCodeLines += p.aiCodeLines;
+      sums.chatInteractions += p.chatInteractions;
+      sums.inlineSuggestions += p.inlineSuggestions;
+      sums.inlineAcceptances += p.inlineAcceptances;
+      sums.acceptanceRate += acceptanceRates[windowStartIndex + i];
+      return sums;
+    }, {
+      aiCodeLines: 0,
+      chatInteractions: 0,
+      inlineSuggestions: 0,
+      inlineAcceptances: 0,
+      acceptanceRate: 0
+    });
+    
+    // Add moving averages
+    const windowLength = windowPoints.length;
+    trends.movingAverages.aiCodeLines.push(windowSums.aiCodeLines / windowLength);
+    trends.movingAverages.chatInteractions.push(windowSums.chatInteractions / windowLength);
+    trends.movingAverages.inlineSuggestions.push(windowSums.inlineSuggestions / windowLength);
+    trends.movingAverages.inlineAcceptances.push(windowSums.inlineAcceptances / windowLength);
+    trends.movingAverages.acceptanceRate.push(windowSums.acceptanceRate / windowLength);
+
+    // Calculate growth rates
     if (index > 0) {
       const prevPoint = sortedData[index - 1];
+      const prevAcceptanceRate = acceptanceRates[index - 1];
+      
       trends.growthRates.aiCodeLines.push(
         calculateGrowthRate(prevPoint.aiCodeLines, point.aiCodeLines)
       );
@@ -139,7 +164,6 @@ function calculateProductivityTrends(groupedData) {
       trends.growthRates.inlineAcceptances.push(
         calculateGrowthRate(prevPoint.inlineAcceptances, point.inlineAcceptances)
       );
-      const prevAcceptanceRate = prevPoint.inlineSuggestions > 0 ? (prevPoint.inlineAcceptances / prevPoint.inlineSuggestions) * 100 : 0;
       trends.growthRates.acceptanceRate.push(
         calculateGrowthRate(prevAcceptanceRate, acceptanceRate)
       );
@@ -151,12 +175,6 @@ function calculateProductivityTrends(groupedData) {
       trends.growthRates.inlineAcceptances.push(null);
       trends.growthRates.acceptanceRate.push(null);
     }
-
-    // Update totals
-    trends.totals.aiCodeLines += point.aiCodeLines;
-    trends.totals.chatInteractions += point.chatInteractions;
-    trends.totals.inlineSuggestions += point.inlineSuggestions;
-    trends.totals.inlineAcceptances += point.inlineAcceptances;
   });
 
   return trends;
