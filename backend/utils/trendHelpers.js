@@ -65,27 +65,92 @@ function calculateProductivityTrends(groupedData) {
       chatInteractions: [],
       inlineSuggestions: [],
       inlineAcceptances: [],
-      uniqueUsers: []
+      acceptanceRate: []
+    },
+    movingAverages: {
+      aiCodeLines: [],
+      chatInteractions: [],
+      inlineSuggestions: [],
+      inlineAcceptances: [],
+      acceptanceRate: []
+    },
+    growthRates: {
+      aiCodeLines: [],
+      chatInteractions: [],
+      inlineSuggestions: [],
+      inlineAcceptances: [],
+      acceptanceRate: []
     },
     totals: {
       aiCodeLines: 0,
       chatInteractions: 0,
       inlineSuggestions: 0,
-      inlineAcceptances: 0,
-      uniqueUsers: new Set()
+      inlineAcceptances: 0
     }
   };
 
   // Sort data points by date
   const sortedData = Object.values(groupedData).sort((a, b) => moment(a.date).diff(moment(b.date)));
 
-  sortedData.forEach(point => {
+  // Calculate moving averages window size (7 days or length of data if smaller)
+  const windowSize = Math.min(7, sortedData.length);
+
+  sortedData.forEach((point, index) => {
     trends.timePoints.push(point.date);
+    
+    // Base metrics
     trends.metrics.aiCodeLines.push(point.aiCodeLines);
     trends.metrics.chatInteractions.push(point.chatInteractions);
     trends.metrics.inlineSuggestions.push(point.inlineSuggestions);
     trends.metrics.inlineAcceptances.push(point.inlineAcceptances);
-    trends.metrics.uniqueUsers.push(point.uniqueUsers);
+    const acceptanceRate = point.inlineSuggestions > 0 ? (point.inlineAcceptances / point.inlineSuggestions) * 100 : 0;
+    trends.metrics.acceptanceRate.push(acceptanceRate);
+
+    // Moving averages - use all available points up to the window size
+    const window = sortedData.slice(Math.max(0, index - windowSize + 1), index + 1);
+    trends.movingAverages.aiCodeLines.push(
+      window.reduce((sum, p) => sum + p.aiCodeLines, 0) / window.length
+    );
+    trends.movingAverages.chatInteractions.push(
+      window.reduce((sum, p) => sum + p.chatInteractions, 0) / window.length
+    );
+    trends.movingAverages.inlineSuggestions.push(
+      window.reduce((sum, p) => sum + p.inlineSuggestions, 0) / window.length
+    );
+    trends.movingAverages.inlineAcceptances.push(
+      window.reduce((sum, p) => sum + p.inlineAcceptances, 0) / window.length
+    );
+    trends.movingAverages.acceptanceRate.push(
+      window.reduce((sum, p) => sum + (p.inlineSuggestions > 0 ? (p.inlineAcceptances / p.inlineSuggestions) * 100 : 0), 0) / window.length
+    );
+
+    // Growth rates (percentage change from previous period)
+    if (index > 0) {
+      const prevPoint = sortedData[index - 1];
+      trends.growthRates.aiCodeLines.push(
+        calculateGrowthRate(prevPoint.aiCodeLines, point.aiCodeLines)
+      );
+      trends.growthRates.chatInteractions.push(
+        calculateGrowthRate(prevPoint.chatInteractions, point.chatInteractions)
+      );
+      trends.growthRates.inlineSuggestions.push(
+        calculateGrowthRate(prevPoint.inlineSuggestions, point.inlineSuggestions)
+      );
+      trends.growthRates.inlineAcceptances.push(
+        calculateGrowthRate(prevPoint.inlineAcceptances, point.inlineAcceptances)
+      );
+      const prevAcceptanceRate = prevPoint.inlineSuggestions > 0 ? (prevPoint.inlineAcceptances / prevPoint.inlineSuggestions) * 100 : 0;
+      trends.growthRates.acceptanceRate.push(
+        calculateGrowthRate(prevAcceptanceRate, acceptanceRate)
+      );
+    } else {
+      // No growth rate for first point
+      trends.growthRates.aiCodeLines.push(null);
+      trends.growthRates.chatInteractions.push(null);
+      trends.growthRates.inlineSuggestions.push(null);
+      trends.growthRates.inlineAcceptances.push(null);
+      trends.growthRates.acceptanceRate.push(null);
+    }
 
     // Update totals
     trends.totals.aiCodeLines += point.aiCodeLines;
@@ -95,6 +160,19 @@ function calculateProductivityTrends(groupedData) {
   });
 
   return trends;
+}
+
+/**
+ * Calculates growth rate between two values
+ * @param {number} prev - Previous value
+ * @param {number} current - Current value
+ * @returns {number} Growth rate as a percentage
+ */
+function calculateGrowthRate(prev, current) {
+  if (prev === 0) {
+    return current > 0 ? 100 : 0;
+  }
+  return ((current - prev) / prev) * 100;
 }
 
 /**
@@ -229,14 +307,14 @@ function generateProductivityCsv(data) {
   const dailyData = groupDataByTimeInterval(data, 'day');
   const sortedDays = Object.values(dailyData).sort((a, b) => moment(a.date).diff(moment(b.date)));
 
-  const headers = ['Date', 'AI Code Lines', 'Chat Interactions', 'Inline Suggestions', 'Inline Acceptances', 'Unique Users'];
+  const headers = ['Date', 'AI Code Lines', 'Chat Interactions', 'Inline Suggestions', 'Inline Acceptances', 'Acceptance Rate (%)'];
   const rows = sortedDays.map(day => [
     day.date,
     day.aiCodeLines,
     day.chatInteractions,
     day.inlineSuggestions,
     day.inlineAcceptances,
-    day.uniqueUsers
+    day.inlineSuggestions > 0 ? ((day.inlineAcceptances / day.inlineSuggestions) * 100).toFixed(2) : '0.00'
   ]);
 
   return [headers, ...rows].map(row => row.join(',')).join('\n');

@@ -246,7 +246,7 @@ const ProductivityTrends = ({ filters }) => {
         </div>
       ) : !loading && !error ? (
         <div className="flex justify-center items-center h-64 text-gray-500">
-          No trend data available. Please select a date range.
+          No trend data available. Please select an user and a date range.
         </div>
       ) : null}
     </div>
