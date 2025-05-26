@@ -466,8 +466,10 @@ app.get('/api/prompts', async (req, res) => {
     let expressionAttributeValues = {};
     
     if (userId) {
-      filterExpressions.push('UserId = :userId');
-      expressionAttributeValues[':userId'] = userId;
+      // UserId in prompt table is d-xxx.user_id, while the actual UserId is user_id => Use contains() to match userId as part of the stored UserId which may have a prefix
+      filterExpressions.push('contains(UserId, :userId)');
+      expressionAttributeValues[':userId'] = userId.trim();
+      console.log(`Searching for UserId containing: ${userId.trim()}`);
     }
     
     if (searchTerm) {

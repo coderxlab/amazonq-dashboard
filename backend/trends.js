@@ -15,7 +15,7 @@ const {
 } = require('./utils/trendHelpers');
 
 
-// Configure AWS
+// Configure AWS 
 const docClient = new AWS.DynamoDB.DocumentClient();
 
 /**
