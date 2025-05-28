@@ -2,20 +2,13 @@ const express = require('express');
 const AWS = require('aws-sdk');
 const router = express.Router();
 
-// Configure AWS
-AWS.config.update({
-  region: process.env.AWS_REGION || 'us-east-1',
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-});
-
 const docClient = new AWS.DynamoDB.DocumentClient();
 
 // Get subscription metrics
 router.get('/metrics', async (req, res) => {
   try {
     const params = {
-      TableName: 'AmazonQDevSubscription'
+      TableName: process.env.DYNAMODB_SUBSCRIPTION_TABLE
     };
 
     const scanResults = await docClient.scan(params).promise();
@@ -23,12 +16,22 @@ router.get('/metrics', async (req, res) => {
     // Calculate metrics
     const metrics = {
       totalSubscriptions: scanResults.Items.length,
-      activeSubscriptions: scanResults.Items.filter(item => item.SubscriptionStatus === 'Active').length,
-      pendingSubscriptions: scanResults.Items.filter(item => item.SubscriptionStatus === 'Pending').length,
-      individualSubscriptions: scanResults.Items.filter(item => item.SubscriptionType === 'Individual').length,
-      groupSubscriptions: scanResults.Items.filter(item => item.SubscriptionType === 'Group').length,
+      activeSubscriptions: 0,
+      pendingSubscriptions: 0,
+      individualSubscriptions: 0,
+      groupSubscriptions: 0,
       subscriptionsByDate: {}
     };
+    
+    scanResults.Items.forEach(item => {
+      if (item.SubscriptionStatus === 'Active') metrics.activeSubscriptions++;
+      if (item.SubscriptionStatus === 'Pending') metrics.pendingSubscriptions++;
+      if (item.SubscriptionType === 'Individual') metrics.individualSubscriptions++;
+      if (item.SubscriptionType === 'Group') metrics.groupSubscriptions++;
+      
+      const date = item.LastActivityDate || 'No Activity';
+      metrics.subscriptionsByDate[date] = (metrics.subscriptionsByDate[date] || 0) + 1;
+    });
 
     // Group subscriptions by last activity date
     scanResults.Items.forEach(item => {
