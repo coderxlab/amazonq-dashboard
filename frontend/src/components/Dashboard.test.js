@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import Dashboard from './Dashboard';
 import { getActivitySummary, getComparativeMetrics } from '../services/api';
@@ -8,13 +8,30 @@ import { getActivitySummary, getComparativeMetrics } from '../services/api';
 jest.mock('../services/api', () => ({
   getActivitySummary: jest.fn(),
   getComparativeMetrics: jest.fn(),
+  getSubscriptionMetrics: jest.fn().mockResolvedValue({
+    totalSubscriptions: 100,
+    activeSubscriptions: 80,
+    pendingSubscriptions: 20,
+    individualSubscriptions: 60,
+    groupSubscriptions: 40
+  })
 }));
 
 // Mock chart.js to avoid canvas rendering issues in tests
+jest.mock('chart.js', () => ({
+  Chart: {
+    register: jest.fn()
+  },
+  ArcElement: jest.fn(),
+  Tooltip: jest.fn(),
+  Legend: jest.fn()
+}));
+
 jest.mock('react-chartjs-2', () => ({
   Bar: () => <div data-testid="bar-chart">Bar Chart</div>,
   Line: () => <div data-testid="line-chart">Line Chart</div>,
   Scatter: () => <div data-testid="scatter-chart">Scatter Chart</div>,
+  Pie: () => <div data-testid="pie-chart">Pie Chart</div>
 }));
 
 // Mock data for testing
@@ -107,14 +124,23 @@ describe('Dashboard Component', () => {
     jest.clearAllMocks();
   });
 
-  test('renders loading state initially', () => {
+  test('renders loading state initially', async () => {
+    // Mock API calls to delay resolution
+    getActivitySummary.mockImplementation(() => new Promise(resolve => setTimeout(resolve, 100)));
+    getComparativeMetrics.mockImplementation(() => new Promise(resolve => setTimeout(resolve, 100)));
+
     render(<Dashboard users={['user123456789', 'user987654321']} loadingUsers={false} />);
+    
+    // Check for heading and loading spinner
     expect(screen.getByRole('heading', { name: /developer productivity dashboard/i })).toBeInTheDocument();
     expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
   });
 
   test('renders summary cards with correct data', async () => {
-    render(<Dashboard users={['user123456789', 'user987654321']} loadingUsers={false} />);
+    await act(async () => {
+      render(<Dashboard users={['user123456789', 'user987654321']} loadingUsers={false} />);
+      await Promise.resolve();
+    });
     
     await waitFor(() => {
       expect(screen.getByText('1500')).toBeInTheDocument(); // Total AI Code Lines
@@ -125,7 +151,10 @@ describe('Dashboard Component', () => {
   });
 
   test('renders enhanced acceptance visualizations section', async () => {
-    render(<Dashboard users={['user123456789', 'user987654321']} loadingUsers={false} />);
+    await act(async () => {
+      render(<Dashboard users={['user123456789', 'user987654321']} loadingUsers={false} />);
+      await Promise.resolve();
+    });
     
     await waitFor(() => {
       expect(screen.getByText('Acceptance Metrics')).toBeInTheDocument();
@@ -136,7 +165,10 @@ describe('Dashboard Component', () => {
   });
 
   test('toggles between different visualization types', async () => {
-    render(<Dashboard users={['user123456789', 'user987654321']} loadingUsers={false} />);
+    await act(async () => {
+      render(<Dashboard users={['user123456789', 'user987654321']} loadingUsers={false} />);
+      await Promise.resolve();
+    });
     
     // Wait for data to load
     await waitFor(() => {
@@ -147,15 +179,24 @@ describe('Dashboard Component', () => {
     expect(screen.getAllByTestId('line-chart')[0]).toBeInTheDocument();
     
     // Click on day of week button
-    fireEvent.click(screen.getByRole('button', { name: /day of week/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /day of week/i }));
+      await Promise.resolve();
+    });
     expect(screen.getAllByTestId('bar-chart')[0]).toBeInTheDocument();
     
     // Click on trend analysis button
-    fireEvent.click(screen.getByRole('button', { name: /trend analysis/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /trend analysis/i }));
+      await Promise.resolve();
+    });
     expect(screen.getAllByTestId('line-chart')[0]).toBeInTheDocument();
     
     // Back to comparison
-    fireEvent.click(screen.getByRole('button', { name: /suggestions vs\. acceptances/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /suggestions vs\. acceptances/i }));
+      await Promise.resolve();
+    });
     expect(screen.getAllByTestId('line-chart')[0]).toBeInTheDocument();
   });
 
