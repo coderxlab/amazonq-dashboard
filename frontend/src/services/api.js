@@ -38,7 +38,14 @@ export const getComparativeMetrics = async (params = {}) => {
     if (endDate) queryParams.append('endDate', endDate);
     if (compareStartDate) queryParams.append('compareStartDate', compareStartDate);
     if (compareEndDate) queryParams.append('compareEndDate', compareEndDate);
-    if (userIds) queryParams.append('userIds', userIds);
+    if (userIds) {
+      // Handle userIds as array and join with comma
+      if (Array.isArray(userIds)) {
+        queryParams.append('userIds', userIds.join(','));
+      } else {
+        queryParams.append('userIds', userIds);
+      }
+    }
     
     if (queryParams.toString()) {
       url += `?${queryParams.toString()}`;

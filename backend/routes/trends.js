@@ -15,7 +15,10 @@ const {
 } = require('../utils/trendHelpers');
 const { awsConfig } = require('../config');
 
-AWS.config.update(awsConfig);
+// Configure AWS only in non-test environment
+if (process.env.NODE_ENV !== 'test') {
+  AWS.config.update(awsConfig);
+}
 
 // Configure AWS 
 const docClient = new AWS.DynamoDB.DocumentClient();

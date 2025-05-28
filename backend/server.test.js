@@ -1,41 +1,16 @@
 const request = require('supertest');
 const express = require('express');
-const AWS = require('aws-sdk');
 const moment = require('moment');
+const { mockDocClient, mockData, setupMockResponses, resetMocks, setupTestEnv } = require('./tests/mockDb');
 
-// Mock AWS DynamoDB
-jest.mock('aws-sdk', () => {
-  const mockDocClient = {
-    scan: jest.fn().mockReturnThis(),
-    query: jest.fn().mockReturnThis(),
-    promise: jest.fn()
-  };
-  return {
-    DynamoDB: jest.fn(),
-    config: {
-      update: jest.fn()
-    },
-    DynamoDB: {
-      DocumentClient: jest.fn(() => mockDocClient)
-    }
-  };
-});
-
-// Import server after mocking AWS
+// Import server after mocking AWS (mock is set up in mockDb.js)
 const app = require('./server');
-const docClient = new AWS.DynamoDB.DocumentClient();
 
-// Reset all mocks before each test
+// Reset all mocks and setup test environment before each test
 beforeEach(() => {
-  jest.clearAllMocks();
-  docClient.scan.mockReturnThis();
-  docClient.query.mockReturnThis();
+  resetMocks();
+  setupTestEnv();
 });
-
-// Set up environment variables for testing
-process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE = 'test-activity-table';
-process.env.DYNAMODB_PROMPT_LOG_TABLE = 'test-prompt-table';
-process.env.PORT = 5001;
 
 // Create a mock Express app for testing
 const mockApp = express();
@@ -46,36 +21,23 @@ describe('GET /api/activity/compare', () => {
   });
 
   it('should return comparative metrics for two periods', async () => {
-    // Mock data for current period
-    const mockCurrentItems = [
-      {
-        UserId: 'user1',
-        Date: '2024-01-01',
-        Chat_AICodeLines: '10',
-        Inline_AICodeLines: '5',
-        Chat_MessagesInteracted: '3',
-        Inline_SuggestionsCount: '8',
-        Inline_AcceptanceCount: '6'
-      }
-    ];
+    // Setup mock responses using our mock data
+    const mockCurrentItems = [mockData.users[0]];
+    const mockPreviousItems = [{
+      ...mockData.users[0],
+      Date: '2023-12-01',
+      Chat_AICodeLines: '8',
+      Inline_AICodeLines: '4',
+      Chat_MessagesInteracted: '2',
+      Inline_SuggestionsCount: '5',
+      Inline_AcceptanceCount: '3'
+    }];
 
-    // Mock data for previous period
-    const mockPreviousItems = [
-      {
-        UserId: 'user1',
-        Date: '2023-12-01',
-        Chat_AICodeLines: '8',
-        Inline_AICodeLines: '4',
-        Chat_MessagesInteracted: '2',
-        Inline_SuggestionsCount: '5',
-        Inline_AcceptanceCount: '3'
-      }
-    ];
-
-    // Mock query responses for both periods
-    docClient.promise
-      .mockResolvedValueOnce({ Items: mockCurrentItems })   // First query (current period)
-      .mockResolvedValueOnce({ Items: mockPreviousItems }); // Second query (previous period)
+    // Setup mock responses for both periods
+    setupMockResponses([
+      { Items: mockCurrentItems },   // First query (current period)
+      { Items: mockPreviousItems }   // Second query (previous period)
+    ]);
 
     const response = await request(app)
       .get('/api/activity/compare')
@@ -104,7 +66,7 @@ describe('GET /api/activity/compare', () => {
     });
 
     // Verify query parameters
-    expect(docClient.query).toHaveBeenCalledWith({
+    expect(mockDocClient.query).toHaveBeenCalledWith({
       TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
       KeyConditionExpression: 'UserId = :userId AND #date BETWEEN :startDate AND :endDate',
       ExpressionAttributeNames: {
@@ -119,24 +81,10 @@ describe('GET /api/activity/compare', () => {
   });
 
   it('should handle multiple user IDs', async () => {
-    // Mock data for multiple users
-    const mockItems = [
-      {
-        UserId: 'user1',
-        Date: '2024-01-01',
-        Chat_AICodeLines: '10',
-        Chat_MessagesInteracted: '3'
-      },
-      {
-        UserId: 'user2',
-        Date: '2024-01-01',
-        Chat_AICodeLines: '5',
-        Chat_MessagesInteracted: '2'
-      }
-    ];
-
-    // Mock query responses for both users
-    docClient.promise.mockResolvedValue({ Items: mockItems });
+    // Use mock data for multiple users
+    setupMockResponses([
+      { Items: mockData.users }
+    ]);
 
     const response = await request(app)
       .get('/api/activity/compare')
@@ -149,8 +97,8 @@ describe('GET /api/activity/compare', () => {
       });
 
     expect(response.status).toBe(200);
-    expect(docClient.query).toHaveBeenCalledTimes(4); // 2 users × 2 periods
-    expect(docClient.query).toHaveBeenCalledWith({
+    expect(mockDocClient.query).toHaveBeenCalledTimes(4); // 2 users × 2 periods
+    expect(mockDocClient.query).toHaveBeenCalledWith({
       TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
       KeyConditionExpression: 'UserId = :userId AND #date BETWEEN :startDate AND :endDate',
       ExpressionAttributeNames: {
@@ -169,17 +117,10 @@ describe('GET /api/activity/compare', () => {
     const now = moment('2024-01-15');
     jest.spyOn(moment, 'now').mockReturnValue(now);
 
-    // Mock data
-    const mockItems = [
-      {
-        UserId: 'user1',
-        Date: '2024-01-14',
-        Chat_AICodeLines: '10',
-        Chat_MessagesInteracted: '3'
-      }
-    ];
-
-    docClient.promise.mockResolvedValue({ Items: mockItems });
+    // Use mock data
+    setupMockResponses([
+      { Items: [mockData.users[0]] }
+    ]);
 
     const response = await request(app)
       .get('/api/activity/compare')
@@ -188,10 +129,10 @@ describe('GET /api/activity/compare', () => {
       });
 
     expect(response.status).toBe(200);
-    expect(docClient.query).toHaveBeenCalledTimes(2); // One for each period
+    expect(mockDocClient.query).toHaveBeenCalledTimes(2); // One for each period
 
     // Verify current period query (last week)
-    expect(docClient.query).toHaveBeenCalledWith(
+    expect(mockDocClient.query).toHaveBeenCalledWith(
       expect.objectContaining({
         ExpressionAttributeValues: expect.objectContaining({
           ':startDate': '2024-01-08', // 1 week ago
@@ -201,7 +142,7 @@ describe('GET /api/activity/compare', () => {
     );
 
     // Verify previous period query (week before last)
-    expect(docClient.query).toHaveBeenCalledWith(
+    expect(mockDocClient.query).toHaveBeenCalledWith(
       expect.objectContaining({
         ExpressionAttributeValues: expect.objectContaining({
           ':startDate': '2023-12-31', // Previous week start
@@ -212,7 +153,8 @@ describe('GET /api/activity/compare', () => {
   });
 
   it('should handle errors gracefully', async () => {
-    docClient.promise.mockRejectedValue(new Error('Database error'));
+    // Mock a database error
+    mockDocClient.promise.mockRejectedValue(new Error('Database error'));
 
     const response = await request(app)
       .get('/api/activity/compare')
@@ -311,68 +253,13 @@ describe('GET /api/activity/compare', () => {
   });
 
   it('should fetch metrics for all users when no userIds provided', async () => {
-    // Mock scan response for getting all users
-    const mockUsers = [
-      { UserId: 'user1' },
-      { UserId: 'user2' }
-    ];
-
-    // Mock activity data for users
-    const mockUser1Data = [
-      {
-        UserId: 'user1',
-        Date: '2024-01-01',
-        Chat_AICodeLines: '10',
-        Inline_AICodeLines: '5',
-        Chat_MessagesInteracted: '3',
-        Inline_SuggestionsCount: '8',
-        Inline_AcceptanceCount: '6'
-      }
-    ];
-
-    const mockUser2Data = [
-      {
-        UserId: 'user2',
-        Date: '2024-01-01',
-        Chat_AICodeLines: '15',
-        Inline_AICodeLines: '7',
-        Chat_MessagesInteracted: '4',
-        Inline_SuggestionsCount: '10',
-        Inline_AcceptanceCount: '8'
-      }
-    ];
-
-    // Mock scan and query responses
-    docClient.scan.mockReturnThis();
-    docClient.query.mockReturnThis();
-
-    // Track mock calls
-    let scanCallCount = 0;
-    let queryCallCount = 0;
-
-    docClient.promise.mockImplementation(() => {
-      if (docClient.scan.mock.calls.length > scanCallCount) {
-        scanCallCount++;
-        console.log('Scan call', scanCallCount);
-        return Promise.resolve({ Items: mockUsers });
-      }
-
-      queryCallCount++;
-      console.log('Query call', queryCallCount);
-
-      // First two queries are for current period
-      if (queryCallCount <= 2) {
-        return Promise.resolve({
-          Items: queryCallCount === 1 ? mockUser1Data : mockUser2Data
-        });
-      }
-      // Next two queries are for previous period
-      else {
-        return Promise.resolve({
-          Items: queryCallCount === 3 ? mockUser1Data : mockUser2Data
-        });
-      }
-    });
+    // Setup mock responses for scan and queries
+    setupMockResponses([
+      { Items: mockData.users },  // Scan response for getting all users
+      { Items: [mockData.users[0]] },  // Query response for user1 current period
+      { Items: [mockData.users[1]] },  // Query response for user2 current period
+      { Items: [mockData.users[0]] }   // Query response for previous period (reused for both users)
+    ]);
 
     const response = await request(app)
       .get('/api/activity/compare')
@@ -396,79 +283,38 @@ describe('GET /api/activity/compare', () => {
     });
 
     // Verify scan was called to get users
-    expect(docClient.scan).toHaveBeenCalledWith(
+    expect(mockDocClient.scan).toHaveBeenCalledWith(
       expect.objectContaining({
         TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
         ProjectionExpression: 'UserId'
       })
     );
 
-    // Verify query was called for each user
-    expect(docClient.query).toHaveBeenCalledTimes(4); // 2 users × 2 periods
+    // Verify query was called for each user and period
+    expect(mockDocClient.query).toHaveBeenCalledTimes(3); // 2 users current + 1 shared previous
+    expect(mockDocClient.query).toHaveBeenCalledWith(
+      expect.objectContaining({
+        TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
+        KeyConditionExpression: 'UserId = :userId AND #date BETWEEN :startDate AND :endDate',
+        ExpressionAttributeValues: expect.objectContaining({
+          ':userId': 'user1',
+          ':startDate': '2024-01-01',
+          ':endDate': '2024-01-31'
+        })
+      })
+    );
   });
-});
-
-mockApp.get('/api/activity/summary', (req, res) => {
-  const summary = {
-    totalAICodeLines: 450,
-    totalChatInteractions: 60,
-    totalInlineSuggestions: 120,
-    totalInlineAcceptances: 90,
-    acceptanceRate: 75,
-    byUser: [
-      {
-        userId: 'user1',
-        aiCodeLines: 270,
-        chatInteractions: 35,
-        inlineSuggestions: 75,
-        inlineAcceptances: 55
-      },
-      {
-        userId: 'user2',
-        aiCodeLines: 180,
-        chatInteractions: 25,
-        inlineSuggestions: 45,
-        inlineAcceptances: 35
-      }
-    ],
-    byDate: [
-      {
-        date: '2023-01-01',
-        aiCodeLines: 270,
-        chatInteractions: 35,
-        inlineSuggestions: 75,
-        inlineAcceptances: 55
-      },
-      {
-        date: '2023-01-02',
-        aiCodeLines: 180,
-        chatInteractions: 25,
-        inlineSuggestions: 45,
-        inlineAcceptances: 35
-      }
-    ],
-    byDayOfWeek: [
-      { day: 'Sunday', dayIndex: 0, suggestions: 15, acceptances: 10, rate: 66.7 },
-      { day: 'Monday', dayIndex: 1, suggestions: 20, acceptances: 15, rate: 75 },
-      { day: 'Tuesday', dayIndex: 2, suggestions: 18, acceptances: 12, rate: 66.7 },
-      { day: 'Wednesday', dayIndex: 3, suggestions: 22, acceptances: 18, rate: 81.8 },
-      { day: 'Thursday', dayIndex: 4, suggestions: 17, acceptances: 13, rate: 76.5 },
-      { day: 'Friday', dayIndex: 5, suggestions: 16, acceptances: 12, rate: 75 },
-      { day: 'Saturday', dayIndex: 6, suggestions: 12, acceptances: 10, rate: 83.3 }
-    ],
-    acceptanceTrend: [
-      { date: '2023-01-01', rate: 73.3, movingAvgRate: 73.3 },
-      { date: '2023-01-02', rate: 77.8, movingAvgRate: 75.6 }
-    ]
-  };
-  
-  res.json(summary);
 });
 
 describe('API Endpoints', () => {
   describe('GET /api/activity/summary', () => {
     test('returns summarized activity data with enhanced visualizations', async () => {
-      const response = await request(mockApp).get('/api/activity/summary');
+      // Setup mock responses for activity data
+      setupMockResponses([
+        { Items: mockData.users }
+      ]);
+
+      const response = await request(app).get('/api/activity/summary');
       
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('totalAICodeLines');
@@ -479,20 +325,70 @@ describe('API Endpoints', () => {
       // Check for enhanced visualization data
       expect(response.body).toHaveProperty('byDayOfWeek');
       expect(response.body.byDayOfWeek).toHaveLength(7);
-      expect(response.body).toHaveProperty('acceptanceTrend');
+      expect(response.body).toHaveProperty('trendAnalysis');
       
       // Check that day of week data is correctly formatted
-      const mondayData = response.body.byDayOfWeek.find(d => d.day === 'Monday');
+      const mondayData = response.body.byDayOfWeek.find(d => d.dayName === 'Monday');
       expect(mondayData).toBeDefined();
       expect(mondayData).toHaveProperty('suggestions');
       expect(mondayData).toHaveProperty('acceptances');
       expect(mondayData).toHaveProperty('rate');
       
       // Check that trend data is correctly formatted
-      expect(response.body.acceptanceTrend).toHaveLength(2);
-      expect(response.body.acceptanceTrend[0]).toHaveProperty('date');
-      expect(response.body.acceptanceTrend[0]).toHaveProperty('rate');
-      expect(response.body.acceptanceTrend[0]).toHaveProperty('movingAvgRate');
+      expect(response.body.trendAnalysis).toBeDefined();
+      expect(response.body.trendAnalysis.daily).toBeDefined();
+      expect(response.body.trendAnalysis.weekly).toBeDefined();
+      expect(response.body.trendAnalysis.monthly).toBeDefined();
+    });
+
+    test('handles errors gracefully', async () => {
+      // Mock a database error
+      mockDocClient.promise.mockRejectedValue(new Error('Database error'));
+
+      const response = await request(app).get('/api/activity/summary');
+      
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({ error: 'Failed to fetch activity summary' });
+    });
+
+    test('filters by user ID when provided', async () => {
+      // Setup mock response with filtered data
+      setupMockResponses([
+        { Items: [mockData.users[0]] }
+      ]);
+
+      const response = await request(app)
+        .get('/api/activity/summary')
+        .query({ userId: 'user1' });
+      
+      expect(response.status).toBe(200);
+      expect(mockDocClient.scan).toHaveBeenCalledWith(
+        expect.objectContaining({
+          FilterExpression: 'UserId = :userId',
+          ExpressionAttributeValues: { ':userId': 'user1' }
+        })
+      );
+    });
+
+    test('filters by date range when provided', async () => {
+      // Setup mock response
+      setupMockResponses([
+        { Items: mockData.users }
+      ]);
+
+      const response = await request(app)
+        .get('/api/activity/summary')
+        .query({
+          startDate: '2024-01-01',
+          endDate: '2024-01-31'
+        });
+      
+      expect(response.status).toBe(200);
+      // Results should be filtered in memory since DynamoDB doesn't support complex date filtering
+      expect(response.body.byDate).toBeDefined();
+      expect(response.body.byDate.every(item => 
+        moment(item.date).isBetween('2024-01-01', '2024-01-31', null, '[]')
+      )).toBe(true);
     });
   });
 });

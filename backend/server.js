@@ -20,8 +20,10 @@ app.use(cors({
 // Middleware
 app.use(express.json());
 
-// Configure AWS
-AWS.config.update(awsConfig);
+// Configure AWS only in non-test environment
+if (process.env.NODE_ENV !== 'test') {
+  AWS.config.update(awsConfig);
+}
 
 const docClient = new AWS.DynamoDB.DocumentClient();
 

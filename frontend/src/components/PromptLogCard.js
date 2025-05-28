@@ -5,8 +5,15 @@ const PromptLogCard = ({ log }) => {
   const [expanded, setExpanded] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
 
-  // Format timestamp
-  const formattedTime = new Date(log.TimeStamp).toLocaleString();
+  // Format timestamp with consistent format
+  const formattedTime = new Date(log.TimeStamp).toLocaleString('en-US', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
   
   // Check if prompt or response is empty
   const hasEmptyPrompt = !log.Prompt || log.Prompt.trim() === '';
@@ -18,6 +25,7 @@ const PromptLogCard = ({ log }) => {
   return (
     <>
       <div 
+        role="article"
         className={`bg-white rounded-lg shadow-md overflow-hidden transition-all duration-200 hover:shadow-lg ${
           hasWarning ? 'border-l-4 border-amber-500' : ''
         }`}

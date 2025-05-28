@@ -33,15 +33,6 @@ router.get('/metrics', async (req, res) => {
       metrics.subscriptionsByDate[date] = (metrics.subscriptionsByDate[date] || 0) + 1;
     });
 
-    // Group subscriptions by last activity date
-    scanResults.Items.forEach(item => {
-      const date = item.LastActivityDate || 'No Activity';
-      if (!metrics.subscriptionsByDate[date]) {
-        metrics.subscriptionsByDate[date] = 0;
-      }
-      metrics.subscriptionsByDate[date]++;
-    });
-
     res.json(metrics);
   } catch (error) {
     console.error('Error fetching subscription metrics:', error);
@@ -53,7 +44,7 @@ router.get('/metrics', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const params = {
-      TableName: 'AmazonQDevSubscription'
+      TableName: process.env.DYNAMODB_SUBSCRIPTION_TABLE
     };
 
     const scanResults = await docClient.scan(params).promise();
