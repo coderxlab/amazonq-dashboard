@@ -4,6 +4,7 @@ const cors = require('cors');
 const AWS = require('aws-sdk');
 const moment = require('moment');
 const trendsRoutes = require('./trends');
+const subscriptionsRoutes = require('./routes/subscriptions');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -34,6 +35,9 @@ app.get('/', (req, res) => {
 
 // Mount trends routes
 app.use('/api/trends', trendsRoutes);
+
+// Mount subscription routes
+app.use('/api/subscriptions', subscriptionsRoutes);
 
 // Get all users
 app.get('/api/users', async (req, res) => {
