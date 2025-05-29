@@ -46,7 +46,7 @@ app.get('/api/users', async (req, res) => {
       TableName: process.env.DYNAMODB_SUBSCRIPTION_TABLE,
       FilterExpression: 'SubscriptionStatus = :status',
       ExpressionAttributeValues: {
-        ':status': 'active'
+        ':status': 'Active'
       },
       ProjectionExpression: 'UserId, #name',
       ExpressionAttributeNames: {

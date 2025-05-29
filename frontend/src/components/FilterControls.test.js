@@ -20,7 +20,16 @@ jest.mock('react-datepicker', () => {
 
 describe('FilterControls', () => {
   const mockOnFilterChange = jest.fn();
-  const mockUsers = ['user123456789', 'user987654321'];
+  const mockUsers = [
+    {
+      UserId: '54887438-e031-702d-ab6a-6a69597e3e08',
+      Name: 'ma-harley'
+    },
+    {
+      UserId: 'e408b4a8-1011-70c3-1796-21d8bff478c8',
+      Name: 'dieuhuyenai'
+    }
+  ];
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -37,23 +46,23 @@ describe('FilterControls', () => {
     expect(screen.getByText('Reset')).toBeInTheDocument();
   });
 
-  it('displays shortened user IDs in select options', () => {
+  it('displays user names in select options', () => {
     render(<FilterControls onFilterChange={mockOnFilterChange} users={mockUsers} loading={false} />);
     
-    expect(screen.getByText('23456789')).toBeInTheDocument();
-    expect(screen.getByText('87654321')).toBeInTheDocument();
+    expect(screen.getByText('ma-harley')).toBeInTheDocument();
+    expect(screen.getByText('dieuhuyenai')).toBeInTheDocument();
   });
 
   it('handles user selection', () => {
     render(<FilterControls onFilterChange={mockOnFilterChange} users={mockUsers} loading={false} />);
     
     const select = screen.getByRole('combobox');
-    fireEvent.change(select, { target: { value: 'user123456789' } });
+    fireEvent.change(select, { target: { value: '54887438-e031-702d-ab6a-6a69597e3e08' } });
     
     fireEvent.click(screen.getByText('Apply Filters'));
     
     expect(mockOnFilterChange).toHaveBeenCalledWith({
-      userId: 'user123456789',
+      userId: '54887438-e031-702d-ab6a-6a69597e3e08',
       startDate: null,
       endDate: null
     });
