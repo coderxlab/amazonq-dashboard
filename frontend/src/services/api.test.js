@@ -41,7 +41,7 @@ describe('API Service', () => {
 
       expect(result).toEqual(mockResponse.data);
       expect(axios.get).toHaveBeenCalledWith(
-        'http://localhost:5000/activity/compare?startDate=2024-01-01&endDate=2024-01-31&compareStartDate=2023-12-01&compareEndDate=2023-12-31&userIds=user1%2Cuser2'
+        'http://localhost:5000/api/activity/compare?startDate=2024-01-01&endDate=2024-01-31&compareStartDate=2023-12-01&compareEndDate=2023-12-31&userIds=user1%2Cuser2'
       );
     });
 

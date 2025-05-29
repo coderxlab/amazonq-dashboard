@@ -41,18 +41,23 @@ app.use('/api/subscriptions', subscriptionsRoutes);
 // Get all users
 app.get('/api/users', async (req, res) => {
   try {
-    // Query the activity log table to get unique users
+    // Query the subscription table to get active users
     const params = {
-      TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
-      ProjectionExpression: 'UserId'
+      TableName: process.env.DYNAMODB_SUBSCRIPTION_TABLE,
+      FilterExpression: 'SubscriptionStatus = :status',
+      ExpressionAttributeValues: {
+        ':status': 'Active'
+      },
+      ProjectionExpression: 'UserId, #name',
+      ExpressionAttributeNames: {
+        '#name': 'Name'
+      }
     };
 
     const scanResults = await docClient.scan(params).promise();
     
-    // Extract unique user IDs
-    const userIds = [...new Set(scanResults.Items.map(item => item.UserId))];
-    
-    res.json(userIds);
+    // Return filtered user data from subscription table
+    res.json(scanResults.Items);
   } catch (error) {
     console.error('Error fetching users:', error);
     res.status(500).json({ error: 'Failed to fetch users' });
@@ -68,22 +73,55 @@ app.get('/api/activity/summary', async (req, res) => {
   try {
     const { userId, startDate, endDate } = req.query;
     
+    // First, get user data from subscription table
+    let userMap = {};
+    if (userId) {
+      // If specific userId is provided, use getItem
+      const userParams = {
+        TableName: process.env.DYNAMODB_SUBSCRIPTION_TABLE,
+        Key: { UserId: userId },
+        ProjectionExpression: 'UserId, #name',
+        ExpressionAttributeNames: {
+          '#name': 'Name'
+        }
+      };
+      const userResult = await docClient.get(userParams).promise();
+      if (userResult.Item) {
+        userMap[userResult.Item.UserId] = userResult.Item.Name;
+      }
+    } else {
+      // If no userId provided, scan for all users
+      const userParams = {
+        TableName: process.env.DYNAMODB_SUBSCRIPTION_TABLE,
+        ProjectionExpression: 'UserId, #name',
+        ExpressionAttributeNames: {
+          '#name': 'Name'
+        }
+      };
+      const userResults = await docClient.scan(userParams).promise();
+      userResults.Items.forEach(user => {
+        userMap[user.UserId] = user.Name;
+      });
+    }
+    
     let params = {
       TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE
     };
     
+    let results;
     // Add filters if provided
     if (userId) {
-      params.FilterExpression = 'UserId = :userId';
+      // Use query instead of scan for better performance when userId is provided
+      params.KeyConditionExpression = 'UserId = :userId';
       params.ExpressionAttributeValues = {
         ':userId': userId
       };
+      const queryResults = await docClient.query(params).promise();
+      results = queryResults.Items;
+    } else {
+      const scanResults = await docClient.scan(params).promise();
+      results = scanResults.Items;
     }
-    
-    const scanResults = await docClient.scan(params).promise();
-    
-    // Filter by date range if provided
-    let results = scanResults.Items;
     if (startDate && endDate) {
       const startMoment = moment(startDate).startOf('day');
       const endMoment = moment(endDate).endOf('day');
@@ -162,6 +200,7 @@ app.get('/api/activity/summary', async (req, res) => {
       if (!summary.byUser[item.UserId]) {
         summary.byUser[item.UserId] = {
           userId: item.UserId,
+          userName: userMap[item.UserId] || 'Unknown',
           aiCodeLines: 0,
           chatInteractions: 0,
           inlineSuggestions: 0,

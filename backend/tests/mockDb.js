@@ -7,6 +7,7 @@ const mockDocClient = {
   put: jest.fn().mockReturnThis(),
   delete: jest.fn().mockReturnThis(),
   update: jest.fn().mockReturnThis(),
+  get: jest.fn().mockReturnThis(),
   promise: jest.fn()
 };
 
@@ -42,6 +43,18 @@ const mockData = {
       Chat_MessagesInteracted: '4',
       Inline_SuggestionsCount: '10',
       Inline_AcceptanceCount: '8'
+    }
+  ],
+  subscriptions: [
+    {
+      UserId: 'user1',
+      Name: 'User One',
+      SubscriptionStatus: 'Active'
+    },
+    {
+      UserId: 'user2',
+      Name: 'User Two',
+      SubscriptionStatus: 'Active'
     }
   ],
   prompts: [
@@ -90,6 +103,10 @@ const setupMockResponses = (responses) => {
   mockDocClient.update.mockImplementation(() => {
     return mockDocClient;
   });
+
+  mockDocClient.get.mockImplementation(() => {
+    return mockDocClient;
+  });
 };
 
 // Reset all mocks
@@ -100,6 +117,7 @@ const resetMocks = () => {
   mockDocClient.put.mockReturnThis();
   mockDocClient.delete.mockReturnThis();
   mockDocClient.update.mockReturnThis();
+  mockDocClient.get.mockReturnThis();
 };
 
 // Setup test environment variables

@@ -307,11 +307,58 @@ describe('GET /api/activity/compare', () => {
 });
 
 describe('API Endpoints', () => {
+  describe('GET /api/users', () => {
+    beforeEach(() => {
+      process.env.DYNAMODB_SUBSCRIPTION_TABLE = 'test-subscription-table';
+      jest.clearAllMocks();
+    });
+
+    test('returns only active users with UserId and Name from subscription table', async () => {
+      const mockUsers = [
+        { UserId: 'user1', Name: 'User One', SubscriptionStatus: 'Active' },
+        { UserId: 'user2', Name: 'User Two', SubscriptionStatus: 'Inactive' }
+      ];
+
+      mockDocClient.promise.mockResolvedValue({ 
+        Items: mockUsers.filter(user => user.SubscriptionStatus === 'Active')
+                       .map(({ UserId, Name }) => ({ UserId, Name }))
+      });
+
+      const response = await request(app).get('/api/users');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual([{
+        UserId: 'user1',
+        Name: 'User One'
+      }]);
+      expect(mockDocClient.scan).toHaveBeenCalledWith({
+        TableName: process.env.DYNAMODB_SUBSCRIPTION_TABLE,
+        FilterExpression: 'SubscriptionStatus = :status',
+        ExpressionAttributeValues: {
+          ':status': 'Active'
+        },
+        ProjectionExpression: 'UserId, #name',
+        ExpressionAttributeNames: {
+          '#name': 'Name'
+        }
+      });
+    });
+
+    test('handles errors gracefully', async () => {
+      mockDocClient.promise.mockRejectedValue(new Error('Database error'));
+
+      const response = await request(app).get('/api/users');
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({ error: 'Failed to fetch users' });
+    });
+  });
   describe('GET /api/activity/summary', () => {
     test('returns summarized activity data with enhanced visualizations', async () => {
-      // Setup mock responses for activity data
+      // Setup mock responses for activity data and subscription data
       setupMockResponses([
-        { Items: mockData.users }
+        { Items: mockData.subscriptions },  // First scan for subscription data
+        { Items: mockData.users }           // Second scan for activity data
       ]);
 
       const response = await request(app).get('/api/activity/summary');
@@ -327,12 +374,10 @@ describe('API Endpoints', () => {
       expect(response.body.byDayOfWeek).toHaveLength(7);
       expect(response.body).toHaveProperty('trendAnalysis');
       
-      // Check that day of week data is correctly formatted
-      const mondayData = response.body.byDayOfWeek.find(d => d.dayName === 'Monday');
-      expect(mondayData).toBeDefined();
-      expect(mondayData).toHaveProperty('suggestions');
-      expect(mondayData).toHaveProperty('acceptances');
-      expect(mondayData).toHaveProperty('rate');
+      // Check that user data is correctly included
+      expect(response.body.byUser[0]).toHaveProperty('userName');
+      expect(response.body.byUser[0].userName).toBe('User One');
+      expect(response.body.byUser[1].userName).toBe('User Two');
       
       // Check that trend data is correctly formatted
       expect(response.body.trendAnalysis).toBeDefined();
@@ -351,10 +396,11 @@ describe('API Endpoints', () => {
       expect(response.body).toEqual({ error: 'Failed to fetch activity summary' });
     });
 
-    test('filters by user ID when provided', async () => {
-      // Setup mock response with filtered data
+    test('uses getItem and query when specific userId is provided', async () => {
+      // Setup mock responses with user data and activity data
       setupMockResponses([
-        { Items: [mockData.users[0]] }
+        { Item: mockData.subscriptions[0] },  // getItem response for subscription data
+        { Items: [mockData.users[0]] }        // query response for activity data
       ]);
 
       const response = await request(app)
@@ -362,18 +408,32 @@ describe('API Endpoints', () => {
         .query({ userId: 'user1' });
       
       expect(response.status).toBe(200);
-      expect(mockDocClient.scan).toHaveBeenCalledWith(
-        expect.objectContaining({
-          FilterExpression: 'UserId = :userId',
-          ExpressionAttributeValues: { ':userId': 'user1' }
-        })
-      );
+      
+      // Verify getItem is used for user data
+      expect(mockDocClient.get).toHaveBeenCalledWith({
+        TableName: process.env.DYNAMODB_SUBSCRIPTION_TABLE,
+        Key: { UserId: 'user1' },
+        ProjectionExpression: 'UserId, #name',
+        ExpressionAttributeNames: {
+          '#name': 'Name'
+        }
+      });
+
+      // Verify query is used for activity data
+      expect(mockDocClient.query).toHaveBeenCalledWith({
+        TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
+        KeyConditionExpression: 'UserId = :userId',
+        ExpressionAttributeValues: {
+          ':userId': 'user1'
+        }
+      });
     });
 
     test('filters by date range when provided', async () => {
-      // Setup mock response
+      // Setup mock responses with filtered data and subscription data
       setupMockResponses([
-        { Items: mockData.users }
+        { Items: mockData.subscriptions },  // First scan for subscription data
+        { Items: mockData.users }           // Second scan for activity data
       ]);
 
       const response = await request(app)

@@ -41,8 +41,8 @@ const FilterControls = ({ onFilterChange, users = [], loading }) => {
           >
             <option value="">All Users</option>
             {Array.isArray(users) && users.map((user) => (
-              <option key={user} value={user}>
-                {user.substring(user.length - 8)} {/* Show last 8 chars of user ID */}
+              <option key={user.UserId} value={user.UserId}>
+                {user.Name}
               </option>
             ))}
           </select>
