@@ -73,6 +73,20 @@ app.get('/api/activity/summary', async (req, res) => {
   try {
     const { userId, startDate, endDate } = req.query;
     
+    // First, get user data from subscription table
+    const userParams = {
+      TableName: process.env.DYNAMODB_SUBSCRIPTION_TABLE,
+      ProjectionExpression: 'UserId, #name',
+      ExpressionAttributeNames: {
+        '#name': 'Name'
+      }
+    };
+    const userResults = await docClient.scan(userParams).promise();
+    const userMap = {};
+    userResults.Items.forEach(user => {
+      userMap[user.UserId] = user.Name;
+    });
+    
     let params = {
       TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE
     };
@@ -167,6 +181,7 @@ app.get('/api/activity/summary', async (req, res) => {
       if (!summary.byUser[item.UserId]) {
         summary.byUser[item.UserId] = {
           userId: item.UserId,
+          userName: userMap[item.UserId] || 'Unknown',
           aiCodeLines: 0,
           chatInteractions: 0,
           inlineSuggestions: 0,

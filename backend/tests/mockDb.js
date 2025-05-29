@@ -44,6 +44,18 @@ const mockData = {
       Inline_AcceptanceCount: '8'
     }
   ],
+  subscriptions: [
+    {
+      UserId: 'user1',
+      Name: 'User One',
+      SubscriptionStatus: 'Active'
+    },
+    {
+      UserId: 'user2',
+      Name: 'User Two',
+      SubscriptionStatus: 'Active'
+    }
+  ],
   prompts: [
     {
       UserId: 'user1',

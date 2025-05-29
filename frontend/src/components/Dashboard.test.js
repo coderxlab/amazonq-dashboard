@@ -44,6 +44,7 @@ const mockSummaryData = {
   byUser: [
     {
       userId: 'user123456789',
+      userName: 'John Doe',
       aiCodeLines: 500,
       chatInteractions: 100,
       inlineSuggestions: 300,
@@ -51,6 +52,7 @@ const mockSummaryData = {
     },
     {
       userId: 'user987654321',
+      userName: 'Jane Smith',
       aiCodeLines: 1000,
       chatInteractions: 150,
       inlineSuggestions: 500,
@@ -129,7 +131,12 @@ describe('Dashboard Component', () => {
     getActivitySummary.mockImplementation(() => new Promise(resolve => setTimeout(resolve, 100)));
     getComparativeMetrics.mockImplementation(() => new Promise(resolve => setTimeout(resolve, 100)));
 
-    render(<Dashboard users={['user123456789', 'user987654321']} loadingUsers={false} />);
+    const mockUsers = [
+      { UserId: 'user123456789', Name: 'John Doe' },
+      { UserId: 'user987654321', Name: 'Jane Smith' }
+    ];
+
+    render(<Dashboard users={mockUsers} loadingUsers={false} />);
     
     // Check for heading and loading spinner
     expect(screen.getByRole('heading', { name: /developer productivity dashboard/i })).toBeInTheDocument();
@@ -137,8 +144,13 @@ describe('Dashboard Component', () => {
   });
 
   test('renders summary cards with correct data', async () => {
+    const mockUsers = [
+      { UserId: 'user123456789', Name: 'John Doe' },
+      { UserId: 'user987654321', Name: 'Jane Smith' }
+    ];
+
     await act(async () => {
-      render(<Dashboard users={['user123456789', 'user987654321']} loadingUsers={false} />);
+      render(<Dashboard users={mockUsers} loadingUsers={false} />);
       await Promise.resolve();
     });
     
@@ -151,8 +163,13 @@ describe('Dashboard Component', () => {
   });
 
   test('renders enhanced acceptance visualizations section', async () => {
+    const mockUsers = [
+      { UserId: 'user123456789', Name: 'John Doe' },
+      { UserId: 'user987654321', Name: 'Jane Smith' }
+    ];
+
     await act(async () => {
-      render(<Dashboard users={['user123456789', 'user987654321']} loadingUsers={false} />);
+      render(<Dashboard users={mockUsers} loadingUsers={false} />);
       await Promise.resolve();
     });
     
@@ -165,8 +182,13 @@ describe('Dashboard Component', () => {
   });
 
   test('toggles between different visualization types', async () => {
+    const mockUsers = [
+      { UserId: 'user123456789', Name: 'John Doe' },
+      { UserId: 'user987654321', Name: 'Jane Smith' }
+    ];
+
     await act(async () => {
-      render(<Dashboard users={['user123456789', 'user987654321']} loadingUsers={false} />);
+      render(<Dashboard users={mockUsers} loadingUsers={false} />);
       await Promise.resolve();
     });
     
@@ -201,13 +223,20 @@ describe('Dashboard Component', () => {
   });
 
   test('renders developer activity table with correct data', async () => {
-    render(<Dashboard users={['user123456789', 'user987654321']} loadingUsers={false} />);
+    const mockUsers = [
+      { UserId: 'user123456789', Name: 'John Doe' },
+      { UserId: 'user987654321', Name: 'Jane Smith' }
+    ];
+    
+    render(<Dashboard users={mockUsers} loadingUsers={false} />);
     
     await waitFor(() => {
       expect(screen.getByText('Developer Activity Summary')).toBeInTheDocument();
       
-      // Check for user IDs (shortened) in the table cells
+      // Check for user names and IDs in the table cells
       const tableCells = screen.getAllByRole('cell');
+      expect(tableCells.find(cell => cell.textContent === 'John Doe')).toBeInTheDocument();
+      expect(tableCells.find(cell => cell.textContent === 'Jane Smith')).toBeInTheDocument();
       expect(tableCells.find(cell => cell.textContent === '23456789')).toBeInTheDocument();
       expect(tableCells.find(cell => cell.textContent === '87654321')).toBeInTheDocument();
       

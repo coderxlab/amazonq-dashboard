@@ -558,6 +558,9 @@ const Dashboard = ({users, loadingUsers}) => {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      User Name
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       User ID
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -577,6 +580,9 @@ const Dashboard = ({users, loadingUsers}) => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {summaryData.byUser.map((user) => (
                     <tr key={user.userId}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {user.userName || 'Unknown'}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         {user.userId.substring(user.userId.length - 8)}
                       </td>

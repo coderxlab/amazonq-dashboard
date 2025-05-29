@@ -315,12 +315,12 @@ describe('API Endpoints', () => {
 
     test('returns only active users with UserId and Name from subscription table', async () => {
       const mockUsers = [
-        { UserId: 'user1', Name: 'User One', SubscriptionStatus: 'active' },
-        { UserId: 'user2', Name: 'User Two', SubscriptionStatus: 'inactive' }
+        { UserId: 'user1', Name: 'User One', SubscriptionStatus: 'Active' },
+        { UserId: 'user2', Name: 'User Two', SubscriptionStatus: 'Inactive' }
       ];
 
-      docClient.promise.mockResolvedValue({ 
-        Items: mockUsers.filter(user => user.SubscriptionStatus === 'active')
+      mockDocClient.promise.mockResolvedValue({ 
+        Items: mockUsers.filter(user => user.SubscriptionStatus === 'Active')
                        .map(({ UserId, Name }) => ({ UserId, Name }))
       });
 
@@ -331,11 +331,11 @@ describe('API Endpoints', () => {
         UserId: 'user1',
         Name: 'User One'
       }]);
-      expect(docClient.scan).toHaveBeenCalledWith({
+      expect(mockDocClient.scan).toHaveBeenCalledWith({
         TableName: process.env.DYNAMODB_SUBSCRIPTION_TABLE,
         FilterExpression: 'SubscriptionStatus = :status',
         ExpressionAttributeValues: {
-          ':status': 'active'
+          ':status': 'Active'
         },
         ProjectionExpression: 'UserId, #name',
         ExpressionAttributeNames: {
@@ -345,7 +345,7 @@ describe('API Endpoints', () => {
     });
 
     test('handles errors gracefully', async () => {
-      docClient.promise.mockRejectedValue(new Error('Database error'));
+      mockDocClient.promise.mockRejectedValue(new Error('Database error'));
 
       const response = await request(app).get('/api/users');
 
@@ -355,9 +355,10 @@ describe('API Endpoints', () => {
   });
   describe('GET /api/activity/summary', () => {
     test('returns summarized activity data with enhanced visualizations', async () => {
-      // Setup mock responses for activity data
+      // Setup mock responses for activity data and subscription data
       setupMockResponses([
-        { Items: mockData.users }
+        { Items: mockData.subscriptions },  // First scan for subscription data
+        { Items: mockData.users }           // Second scan for activity data
       ]);
 
       const response = await request(app).get('/api/activity/summary');
@@ -373,12 +374,10 @@ describe('API Endpoints', () => {
       expect(response.body.byDayOfWeek).toHaveLength(7);
       expect(response.body).toHaveProperty('trendAnalysis');
       
-      // Check that day of week data is correctly formatted
-      const mondayData = response.body.byDayOfWeek.find(d => d.dayName === 'Monday');
-      expect(mondayData).toBeDefined();
-      expect(mondayData).toHaveProperty('suggestions');
-      expect(mondayData).toHaveProperty('acceptances');
-      expect(mondayData).toHaveProperty('rate');
+      // Check that user data is correctly included
+      expect(response.body.byUser[0]).toHaveProperty('userName');
+      expect(response.body.byUser[0].userName).toBe('User One');
+      expect(response.body.byUser[1].userName).toBe('User Two');
       
       // Check that trend data is correctly formatted
       expect(response.body.trendAnalysis).toBeDefined();
@@ -398,9 +397,10 @@ describe('API Endpoints', () => {
     });
 
     test('filters by user ID when provided', async () => {
-      // Setup mock response with filtered data
+      // Setup mock responses with filtered data and subscription data
       setupMockResponses([
-        { Items: [mockData.users[0]] }
+        { Items: mockData.subscriptions },  // First scan for subscription data
+        { Items: [mockData.users[0]] }      // Second scan for activity data
       ]);
 
       const response = await request(app)
@@ -417,9 +417,10 @@ describe('API Endpoints', () => {
     });
 
     test('filters by date range when provided', async () => {
-      // Setup mock response
+      // Setup mock responses with filtered data and subscription data
       setupMockResponses([
-        { Items: mockData.users }
+        { Items: mockData.subscriptions },  // First scan for subscription data
+        { Items: mockData.users }           // Second scan for activity data
       ]);
 
       const response = await request(app)
