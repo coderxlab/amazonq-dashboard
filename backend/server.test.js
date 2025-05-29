@@ -466,6 +466,52 @@ mockApp.get('/api/activity/summary', (req, res) => {
 });
 
 describe('API Endpoints', () => {
+  describe('GET /api/users', () => {
+    beforeEach(() => {
+      process.env.DYNAMODB_SUBSCRIPTION_TABLE = 'test-subscription-table';
+      jest.clearAllMocks();
+    });
+
+    test('returns only active users with UserId and Name from subscription table', async () => {
+      const mockUsers = [
+        { UserId: 'user1', Name: 'User One', SubscriptionStatus: 'active' },
+        { UserId: 'user2', Name: 'User Two', SubscriptionStatus: 'inactive' }
+      ];
+
+      docClient.promise.mockResolvedValue({ 
+        Items: mockUsers.filter(user => user.SubscriptionStatus === 'active')
+                       .map(({ UserId, Name }) => ({ UserId, Name }))
+      });
+
+      const response = await request(app).get('/api/users');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual([{
+        UserId: 'user1',
+        Name: 'User One'
+      }]);
+      expect(docClient.scan).toHaveBeenCalledWith({
+        TableName: process.env.DYNAMODB_SUBSCRIPTION_TABLE,
+        FilterExpression: 'SubscriptionStatus = :status',
+        ExpressionAttributeValues: {
+          ':status': 'active'
+        },
+        ProjectionExpression: 'UserId, #name',
+        ExpressionAttributeNames: {
+          '#name': 'Name'
+        }
+      });
+    });
+
+    test('handles errors gracefully', async () => {
+      docClient.promise.mockRejectedValue(new Error('Database error'));
+
+      const response = await request(app).get('/api/users');
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({ error: 'Failed to fetch users' });
+    });
+  });
   describe('GET /api/activity/summary', () => {
     test('returns summarized activity data with enhanced visualizations', async () => {
       const response = await request(mockApp).get('/api/activity/summary');

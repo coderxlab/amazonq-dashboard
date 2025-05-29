@@ -38,18 +38,23 @@ app.use('/api/trends', trendsRoutes);
 // Get all users
 app.get('/api/users', async (req, res) => {
   try {
-    // Query the activity log table to get unique users
+    // Query the subscription table to get active users
     const params = {
-      TableName: process.env.DYNAMODB_USER_ACTIVITY_LOG_TABLE,
-      ProjectionExpression: 'UserId'
+      TableName: process.env.DYNAMODB_SUBSCRIPTION_TABLE,
+      FilterExpression: 'SubscriptionStatus = :status',
+      ExpressionAttributeValues: {
+        ':status': 'active'
+      },
+      ProjectionExpression: 'UserId, #name',
+      ExpressionAttributeNames: {
+        '#name': 'Name'
+      }
     };
 
     const scanResults = await docClient.scan(params).promise();
     
-    // Extract unique user IDs
-    const userIds = [...new Set(scanResults.Items.map(item => item.UserId))];
-    
-    res.json(userIds);
+    // Return filtered user data from subscription table
+    res.json(scanResults.Items);
   } catch (error) {
     console.error('Error fetching users:', error);
     res.status(500).json({ error: 'Failed to fetch users' });
