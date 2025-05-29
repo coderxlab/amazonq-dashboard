@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const AWS = require('aws-sdk');
 const moment = require('moment');
-const logger = require('./logger');
+const logger = require('../logger');
 const {
   groupDataByTimeInterval,
   calculateProductivityTrends,
@@ -12,8 +12,13 @@ const {
   generateProductivityCsv,
   generateAdoptionCsv,
   generateCorrelationCsv
-} = require('./utils/trendHelpers');
+} = require('../utils/trendHelpers');
+const { awsConfig } = require('../config');
 
+// Configure AWS only in non-test environment
+if (process.env.NODE_ENV !== 'test') {
+  AWS.config.update(awsConfig);
+}
 
 // Configure AWS 
 const docClient = new AWS.DynamoDB.DocumentClient();

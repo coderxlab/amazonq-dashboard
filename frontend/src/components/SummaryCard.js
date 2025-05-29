@@ -2,8 +2,8 @@ import React from 'react';
 
 const SummaryCard = ({ title, value, icon, color }) => {
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <div className="flex items-center">
+    <div className="bg-white rounded-lg shadow p-6" role="article">
+      <div className="flex items-center h-full">
         <div className={`rounded-full p-3 ${color}`}>
           {icon}
         </div>

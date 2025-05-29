@@ -15,9 +15,8 @@ import {
 import FilterControls from './FilterControls';
 import SummaryCard from './SummaryCard';
 import ProductivityTrends from './ProductivityTrends';
-import AdoptionComparison from './AdoptionComparison';
-import CorrelationAnalysis from './CorrelationAnalysis';
 import ComparisonChart from './ComparisonChart';
+import SubscriptionSummary from './SubscriptionSummary';
 import { getActivitySummary, getComparativeMetrics } from '../services/api';
 import moment from 'moment';
 
@@ -352,6 +351,9 @@ const Dashboard = ({users, loadingUsers}) => {
     <div>
       <h1 className="text-2xl font-bold mb-6">Developer Productivity Dashboard</h1>
       
+      {/* Subscription Summary */}
+      <SubscriptionSummary />
+      
       <FilterControls onFilterChange={setFilters} users={users} loadingUsers={loadingUsers} />
       
       {/* Tab Navigation */}
@@ -604,11 +606,6 @@ const Dashboard = ({users, loadingUsers}) => {
       {/* Productivity Trends Tab */}
       {!loading && !error && activeTab === 'productivity' && (
         <ProductivityTrends filters={filters} />
-      )}
-      
-      {/* Correlation Analysis Tab */}
-      {!loading && !error && activeTab === 'correlation' && (
-        <CorrelationAnalysis filters={filters} />
       )}
     </div>
   );

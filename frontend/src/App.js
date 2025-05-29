@@ -3,6 +3,7 @@ import axios from 'axios';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
 import PromptLogs from './components/PromptLogs';
+import SubscriptionMetrics from './components/SubscriptionMetrics';
 import './App.css';
 
 

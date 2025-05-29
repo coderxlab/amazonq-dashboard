@@ -39,10 +39,27 @@ const ProductivityTrends = ({ filters }) => {
 
   const handleExport = async () => {
     try {
-      await exportTrendData({
+      if (!filters.startDate || !filters.endDate) {
+        setError('Start date and end date are required for export');
+        return;
+      }
+      
+      const response = await exportTrendData({
         type: 'productivity',
-        ...filters
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+        userId: filters.userId,
+        interval
       });
+      
+      // Create a download link for the CSV file
+      const url = window.URL.createObjectURL(new Blob([response]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `productivity_trends_${interval}_${filters.startDate}_to_${filters.endDate}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
     } catch (err) {
       setError('Failed to export trend data');
       console.error(err);

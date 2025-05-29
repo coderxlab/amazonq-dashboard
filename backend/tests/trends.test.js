@@ -1,38 +1,27 @@
 const request = require('supertest');
 const express = require('express');
-const AWS = require('aws-sdk');
 const moment = require('moment');
-const trendsRoutes = require('../trends');
+const { mockDocClient, mockData, setupMockResponses, resetMocks, setupTestEnv } = require('./mockDb');
+const trendsRoutes = require('../routes/trends');
 
-// Mock AWS SDK
-jest.mock('aws-sdk', () => {
-  const mockDocClient = {
-    scan: jest.fn().mockReturnThis(),
-    promise: jest.fn()
-  };
-  return {
-    DynamoDB: {
-      DocumentClient: jest.fn(() => mockDocClient)
-    }
-  };
+// Reset all mocks and setup test environment before each test
+beforeEach(() => {
+  resetMocks();
+  setupTestEnv();
 });
 
 describe('Trends API Routes', () => {
   let app;
-  let mockDocClient;
-
+  
   beforeEach(() => {
     // Create a new Express app for each test
     app = express();
     app.use(express.json());
     app.use('/api/trends', trendsRoutes);
-
-    // Get reference to mock DocumentClient
-    mockDocClient = new AWS.DynamoDB.DocumentClient();
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    resetMocks();
   });
 
   describe('GET /api/trends/activity', () => {
@@ -52,7 +41,7 @@ describe('Trends API Routes', () => {
     ];
 
     it('should return filtered activity data', async () => {
-      mockDocClient.promise.mockResolvedValueOnce({ Items: mockActivityData });
+      setupMockResponses([{ Items: mockActivityData }]);
 
       const response = await request(app)
         .get('/api/trends/activity')
@@ -94,7 +83,7 @@ describe('Trends API Routes', () => {
     ];
 
     it('should return productivity trends', async () => {
-      mockDocClient.promise.mockResolvedValueOnce({ Items: mockProductivityData });
+      setupMockResponses([{ Items: mockProductivityData }]);
 
       const response = await request(app)
         .get('/api/trends/productivity')
@@ -128,6 +117,53 @@ describe('Trends API Routes', () => {
       expect(response.status).toBe(400);
       expect(response.body.error).toBe('Start date and end date are required');
     });
+
+    it('should validate interval parameter', async () => {
+      const response = await request(app)
+        .get('/api/trends/productivity')
+        .query({
+          userId: 'user1',
+          startDate: '2024-03-01',
+          endDate: '2024-03-02',
+          interval: 'invalid'
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('Invalid interval. Must be one of: day, week, month');
+    });
+
+    it('should handle empty result set', async () => {
+      setupMockResponses([{ Items: [] }]);
+
+      const response = await request(app)
+        .get('/api/trends/productivity')
+        .query({
+          userId: 'user1',
+          startDate: '2024-03-01',
+          endDate: '2024-03-02',
+          interval: 'day'
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toBeDefined();
+    });
+
+    it('should handle server errors', async () => {
+      mockDocClient.promise.mockRejectedValue(new Error('Database error'));
+
+      const response = await request(app)
+        .get('/api/trends/productivity')
+        .query({
+          userId: 'user1',
+          startDate: '2024-03-01',
+          endDate: '2024-03-02',
+          interval: 'day'
+        });
+
+      expect(response.status).toBe(500);
+      expect(response.body.error).toBe('An error occurred while fetching productivity trends');
+      expect(response.body.code).toBe('INTERNAL_SERVER_ERROR');
+    });
   });
 
   describe('GET /api/trends/adoption', () => {
@@ -145,10 +181,11 @@ describe('Trends API Routes', () => {
     ];
 
     it('should return adoption comparison data', async () => {
-      mockDocClient.promise
-        .mockResolvedValueOnce({ Items: mockAdoptionData }) // First scan for adoption date
-        .mockResolvedValueOnce({ Items: mockAdoptionData.slice(0, 1) }) // Before data
-        .mockResolvedValueOnce({ Items: mockAdoptionData.slice(1) }); // After data
+      setupMockResponses([
+        { Items: mockAdoptionData },
+        { Items: mockAdoptionData.slice(0, 1) },
+        { Items: mockAdoptionData.slice(1) }
+      ]);
 
       const response = await request(app)
         .get('/api/trends/adoption')
@@ -202,7 +239,7 @@ describe('Trends API Routes', () => {
     ];
 
     it('should return correlation analysis', async () => {
-      mockDocClient.promise.mockResolvedValueOnce({ Items: mockCorrelationData });
+      setupMockResponses([{ Items: mockCorrelationData }]);
 
       const response = await request(app)
         .get('/api/trends/correlation')
@@ -223,6 +260,61 @@ describe('Trends API Routes', () => {
         }
       });
     });
+
+    it('should validate required date parameters', async () => {
+      const response = await request(app)
+        .get('/api/trends/correlation')
+        .query({
+          metric: 'aiCodeLines'
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('Start date and end date are required');
+    });
+
+    it('should validate metric parameter', async () => {
+      const response = await request(app)
+        .get('/api/trends/correlation')
+        .query({
+          startDate: '2024-03-01',
+          endDate: '2024-03-02',
+          metric: 'invalidMetric'
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('Invalid metric. Must be one of:');
+    });
+
+    it('should handle empty result set', async () => {
+      setupMockResponses([{ Items: [] }]);
+
+      const response = await request(app)
+        .get('/api/trends/correlation')
+        .query({
+          startDate: '2024-03-01',
+          endDate: '2024-03-02',
+          metric: 'aiCodeLines'
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toBeDefined();
+    });
+
+    it('should handle server errors', async () => {
+      mockDocClient.promise.mockRejectedValue(new Error('Database error'));
+
+      const response = await request(app)
+        .get('/api/trends/correlation')
+        .query({
+          startDate: '2024-03-01',
+          endDate: '2024-03-02',
+          metric: 'aiCodeLines'
+        });
+
+      expect(response.status).toBe(500);
+      expect(response.body.error).toBe('An error occurred while fetching correlation analysis');
+      expect(response.body.code).toBe('INTERNAL_SERVER_ERROR');
+    });
   });
 
   describe('GET /api/trends/export', () => {
@@ -242,7 +334,7 @@ describe('Trends API Routes', () => {
     ];
 
     it('should export data in CSV format', async () => {
-      mockDocClient.promise.mockResolvedValueOnce({ Items: mockExportData });
+      setupMockResponses([{ Items: mockExportData }]);
 
       const response = await request(app)
         .get('/api/trends/export')

@@ -3,7 +3,9 @@ const express = require('express');
 const cors = require('cors');
 const AWS = require('aws-sdk');
 const moment = require('moment');
-const trendsRoutes = require('./trends');
+const trendsRoutes = require('./routes/trends');
+const subscriptionsRoutes = require('./routes/subscriptions');
+const { awsConfig } = require('./config');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -18,12 +20,10 @@ app.use(cors({
 // Middleware
 app.use(express.json());
 
-// Configure AWS
-AWS.config.update({
-  region: process.env.AWS_REGION || 'us-east-1',
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-});
+// Configure AWS only in non-test environment
+if (process.env.NODE_ENV !== 'test') {
+  AWS.config.update(awsConfig);
+}
 
 const docClient = new AWS.DynamoDB.DocumentClient();
 
@@ -34,6 +34,9 @@ app.get('/', (req, res) => {
 
 // Mount trends routes
 app.use('/api/trends', trendsRoutes);
+
+// Mount subscription routes
+app.use('/api/subscriptions', subscriptionsRoutes);
 
 // Get all users
 app.get('/api/users', async (req, res) => {
