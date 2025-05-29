@@ -7,6 +7,7 @@ const mockDocClient = {
   put: jest.fn().mockReturnThis(),
   delete: jest.fn().mockReturnThis(),
   update: jest.fn().mockReturnThis(),
+  get: jest.fn().mockReturnThis(),
   promise: jest.fn()
 };
 
@@ -102,6 +103,10 @@ const setupMockResponses = (responses) => {
   mockDocClient.update.mockImplementation(() => {
     return mockDocClient;
   });
+
+  mockDocClient.get.mockImplementation(() => {
+    return mockDocClient;
+  });
 };
 
 // Reset all mocks
@@ -112,6 +117,7 @@ const resetMocks = () => {
   mockDocClient.put.mockReturnThis();
   mockDocClient.delete.mockReturnThis();
   mockDocClient.update.mockReturnThis();
+  mockDocClient.get.mockReturnThis();
 };
 
 // Setup test environment variables

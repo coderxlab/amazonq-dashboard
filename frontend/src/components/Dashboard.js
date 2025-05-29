@@ -61,7 +61,7 @@ const Dashboard = ({users, loadingUsers}) => {
         // Fetch comparative data for the previous period
         const { startDate, endDate, userId } = filters;
         let tempUserIds = userId
-        if (!userId) tempUserIds = users.join(", ")
+        if (!userId) tempUserIds = users.map(user => user.UserId).join(", ")
 
         let tempStartDate = startDate
         let tempEndDate = endDate
