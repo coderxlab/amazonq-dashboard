@@ -230,3 +230,38 @@ Set up automated actions to run when either conversation start or prompt start
 ```
 /context hooks add --trigger conversation_start --command "node /Users/macintoshhd/Desktop/coderpush/AmazonQ-productivity/.amazonq/hooks/suggestFocus.js"
 ```
+## 12. Write effective prompts with context.
+Effective prompting is crucial for getting good results from Cursor. Here’s how to do it right:
+
+Be Specific: Clearly state what you want to achieve
+Provide Context: Reference relevant files using @ (e.g., @MyComponent) or use @codebase to consider your entire codebase
+Break Down Tasks: Split complex tasks into smaller, manageable pieces
+Use Step-by-Step Instructions: Guide Cursor through the process
+Maintain Clear Naming: Use consistent naming conventions to help Cursor understand your codebase structure
+## 13. Follow an iterative process.
+A successful development loop looks like this:
+
+Plan: Let AmazonQ outline its approach before coding
+Code: Have AmazonQ implement the solution
+Test: Run tests and let AmazonQ fix any issues
+Review: Have AmazonQ review its own output for improvements
+## 14. Try a few advanced techniques.
+- Prompt Chaining
+Break complex tasks into multiple prompts:
+
+First prompt: Brainstorm approaches
+Second prompt: Write pseudocode
+Third prompt: Implement the solution
+
+- Progressive Refinement
+When first attempt isn’t perfect:
+Ask it to review its own output
+Feed back any errors or issues
+Let it iterate and improve
+
+- Context Management
+Keep chats focused and short
+Start fresh chats for new tasks
+Update your memory file between tasks
+
+Source: https://spin.atomicobject.com/cursor-tips-vibe-coding/?ref=dailydev
