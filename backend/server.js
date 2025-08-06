@@ -41,13 +41,9 @@ app.use('/api/subscriptions', subscriptionsRoutes);
 // Get all users
 app.get('/api/users', async (req, res) => {
   try {
-    // Query the subscription table to get active users
+    // Query the subscription table to get users
     const params = {
       TableName: process.env.DYNAMODB_SUBSCRIPTION_TABLE,
-      FilterExpression: 'SubscriptionStatus = :status',
-      ExpressionAttributeValues: {
-        ':status': 'Active'
-      },
       ProjectionExpression: 'UserId, #name',
       ExpressionAttributeNames: {
         '#name': 'Name'
