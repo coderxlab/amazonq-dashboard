@@ -11,7 +11,13 @@ jest.mock('react-chartjs-2', () => ({
 jest.mock('chart.js', () => ({
   Chart: {
     register: jest.fn()
-  }
+  },
+  CategoryScale: jest.fn(),
+  LinearScale: jest.fn(),
+  BarElement: jest.fn(),
+  Title: jest.fn(),
+  Tooltip: jest.fn(),
+  Legend: jest.fn()
 }));
 
 describe('ComparisonChart', () => {

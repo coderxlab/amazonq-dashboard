@@ -15,9 +15,8 @@ import {
 import FilterControls from './FilterControls';
 import SummaryCard from './SummaryCard';
 import ProductivityTrends from './ProductivityTrends';
-import AdoptionComparison from './AdoptionComparison';
-import CorrelationAnalysis from './CorrelationAnalysis';
 import ComparisonChart from './ComparisonChart';
+import SubscriptionSummary from './SubscriptionSummary';
 import { getActivitySummary, getComparativeMetrics } from '../services/api';
 import moment from 'moment';
 
@@ -62,7 +61,7 @@ const Dashboard = ({users, loadingUsers}) => {
         // Fetch comparative data for the previous period
         const { startDate, endDate, userId } = filters;
         let tempUserIds = userId
-        if (!userId) tempUserIds = users.join(", ")
+        if (!userId) tempUserIds = users.map(user => user.UserId).join(", ")
 
         let tempStartDate = startDate
         let tempEndDate = endDate
@@ -352,6 +351,9 @@ const Dashboard = ({users, loadingUsers}) => {
     <div>
       <h1 className="text-2xl font-bold mb-6">Developer Productivity Dashboard</h1>
       
+      {/* Subscription Summary */}
+      <SubscriptionSummary />
+      
       <FilterControls onFilterChange={setFilters} users={users} loadingUsers={loadingUsers} />
       
       {/* Tab Navigation */}
@@ -556,6 +558,9 @@ const Dashboard = ({users, loadingUsers}) => {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      User Name
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       User ID
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -575,6 +580,9 @@ const Dashboard = ({users, loadingUsers}) => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {summaryData.byUser.map((user) => (
                     <tr key={user.userId}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {user.userName || 'Unknown'}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         {user.userId.substring(user.userId.length - 8)}
                       </td>
@@ -604,11 +612,6 @@ const Dashboard = ({users, loadingUsers}) => {
       {/* Productivity Trends Tab */}
       {!loading && !error && activeTab === 'productivity' && (
         <ProductivityTrends filters={filters} />
-      )}
-      
-      {/* Correlation Analysis Tab */}
-      {!loading && !error && activeTab === 'correlation' && (
-        <CorrelationAnalysis filters={filters} />
       )}
     </div>
   );

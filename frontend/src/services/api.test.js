@@ -1,10 +1,7 @@
-import { getComparativeMetrics, _api } from './api';
+import axios from 'axios';
+import { getComparativeMetrics } from './api';
 
-jest.mock('axios', () => ({
-  create: jest.fn(() => ({
-    get: jest.fn()
-  }))
-}));
+jest.mock('axios');
 
 describe('API Service', () => {
   beforeEach(() => {
@@ -30,7 +27,7 @@ describe('API Service', () => {
         }
       };
 
-      _api.get.mockResolvedValueOnce(mockResponse);
+      axios.get.mockResolvedValueOnce(mockResponse);
 
       const filters = {
         userIds: ['user1', 'user2'],
@@ -43,20 +40,14 @@ describe('API Service', () => {
       const result = await getComparativeMetrics(filters);
 
       expect(result).toEqual(mockResponse.data);
-      expect(_api.get).toHaveBeenCalledWith('/activity/compare', {
-        params: {
-          userIds: 'user1,user2',
-          startDate: '2024-01-01',
-          endDate: '2024-01-31',
-          compareStartDate: '2023-12-01',
-          compareEndDate: '2023-12-31'
-        }
-      });
+      expect(axios.get).toHaveBeenCalledWith(
+        'http://localhost:5000/api/activity/compare?startDate=2024-01-01&endDate=2024-01-31&compareStartDate=2023-12-01&compareEndDate=2023-12-31&userIds=user1%2Cuser2'
+      );
     });
 
     it('handles errors when fetching comparative metrics', async () => {
       const mockError = new Error('API Error');
-      _api.get.mockRejectedValueOnce(mockError);
+      axios.get.mockRejectedValueOnce(mockError);
 
       await expect(getComparativeMetrics({})).rejects.toThrow('API Error');
     });
