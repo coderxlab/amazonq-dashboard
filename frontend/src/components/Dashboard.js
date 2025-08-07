@@ -39,7 +39,8 @@ const Dashboard = ({users, loadingUsers}) => {
   const [filters, setFilters] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [activeVisualization, setActiveVisualization] = useState('comparison'); // Default visualization
+  const [activeVisualization, setActiveVisualization] = useState('comparison');
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' }); // Default visualization
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
   const [activeTab, setActiveTab] = useState('summary');
@@ -347,6 +348,55 @@ const Dashboard = ({users, loadingUsers}) => {
     },
   };
 
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortedUsers = () => {
+    if (!summaryData?.byUser) return [];
+    
+    const sortedUsers = [...summaryData.byUser];
+    
+    if (sortConfig.key) {
+      sortedUsers.sort((a, b) => {
+        let aValue, bValue;
+        
+        switch (sortConfig.key) {
+          case 'aiCodeLines':
+            aValue = a.aiCodeLines;
+            bValue = b.aiCodeLines;
+            break;
+          case 'inlineSuggestions':
+            aValue = a.inlineSuggestions;
+            bValue = b.inlineSuggestions;
+            break;
+          case 'acceptanceRate':
+            aValue = a.inlineSuggestions > 0 ? (a.inlineAcceptances / a.inlineSuggestions) * 100 : 0;
+            bValue = b.inlineSuggestions > 0 ? (b.inlineAcceptances / b.inlineSuggestions) * 100 : 0;
+            break;
+          case 'chatInteractions':
+            aValue = a.chatInteractions;
+            bValue = b.chatInteractions;
+            break;
+          default:
+            return 0;
+        }
+        
+        if (sortConfig.direction === 'asc') {
+          return aValue - bValue;
+        } else {
+          return bValue - aValue;
+        }
+      });
+    }
+    
+    return sortedUsers;
+  };
+
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">Developer Productivity Dashboard</h1>
@@ -563,22 +613,22 @@ const Dashboard = ({users, loadingUsers}) => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       User ID
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      AI Code Lines
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" onClick={() => handleSort('aiCodeLines')}>
+                      AI Code Lines {sortConfig.key === 'aiCodeLines' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Suggestions
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" onClick={() => handleSort('inlineSuggestions')}>
+                      Suggestions {sortConfig.key === 'inlineSuggestions' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Acceptance %
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" onClick={() => handleSort('acceptanceRate')}>
+                      Acceptance % {sortConfig.key === 'acceptanceRate' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Chat Interactions
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" onClick={() => handleSort('chatInteractions')}>
+                      Chat Interactions {sortConfig.key === 'chatInteractions' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {summaryData.byUser.map((user) => (
+                  {getSortedUsers().map((user) => (
                     <tr key={user.userId}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         {user.userName || 'Unknown'}
